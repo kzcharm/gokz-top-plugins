@@ -1,0 +1,191 @@
+"Phrases"
+{
+	"GOKZTop_RatePrompt"
+	{
+		"en"		"{lime}Rate the current map with {gold}!rate{default} (menu) or {gold}!rate 5 [comment]{default} (overall)"
+		"ru"		"{lime}Оцените карту: {gold}!rate{default} (меню) или {gold}!rate 5 [коммент]{default} (overall)"
+		"chi"		"{lime}为当前地图评分：{gold}!rate{default}（菜单）或 {gold}!rate 5 [评论]{default}（综合）"
+	}
+
+	"GOKZTop_RateUsage"
+	{
+		"en"		"{yellow}Usage: {gold}!rate{default} OR {gold}!rate 5 [comment]{default} OR {gold}!rate <aspect> <1-5> [comment]"
+		"ru"		"{yellow}Использование: {gold}!rate{default} или {gold}!rate 5 [коммент]{default} или {gold}!rate <aspect> <1-5> [коммент]"
+		"chi"		"{yellow}用法：{gold}!rate{default} 或 {gold}!rate 5 [评论]{default} 或 {gold}!rate <aspect> <1-5> [评论]"
+	}
+
+	"GOKZTop_RatingRangeError"
+	{
+		"en"		"{red}Rating must be between 1 and 5"
+		"ru"		"{red}Оценка должна быть от 1 до 5"
+		"chi"		"{red}评分必须在 1 到 5 之间"
+	}
+
+	"GOKZTop_UnknownAspect"
+	{
+		"en"		"{red}Unknown aspect. Use visuals|overall|gameplay"
+		"ru"		"{red}Неизвестный аспект. Используйте visuals|overall|gameplay"
+		"chi"		"{red}未知的评分项。请使用 visuals|overall|gameplay"
+	}
+
+	"GOKZTop_RateAspectUsage"
+	{
+		"en"		"{red}Usage: !rate <aspect> <1-5> [comment]"
+		"ru"		"{red}Использование: !rate <aspect> <1-5> [коммент]"
+		"chi"		"{red}用法：!rate <aspect> <1-5> [评论]"
+	}
+
+	"GOKZTop_CommentCancelled"
+	{
+		"en"		"{yellow}Comment cancelled."
+		"ru"		"{yellow}Комментарий отменён."
+		"chi"		"{yellow}已取消评论。"
+	}
+
+	"GOKZTop_CommentPrompt"
+	{
+		"en"		"{yellow}Type your comment in chat now (or {gold}!cancel{yellow})."
+		"ru"		"{yellow}Введите комментарий в чат (или {gold}!cancel{yellow})."
+		"chi"		"{yellow}请在聊天中输入评论（或 {gold}!cancel{yellow}）。"
+	}
+
+	"GOKZTop_Menu_RateComment"
+	{
+		"en"		"Write/Update Comment"
+		"ru"		"Написать/обновить комментарий"
+		"chi"		"撰写/更新评论"
+	}
+
+	"GOKZTop_Menu_ViewComments"
+	{
+		"en"		"View Comments"
+		"ru"		"Просмотреть комментарии"
+		"chi"		"查看评论"
+	}
+
+	"GOKZTop_Menu_LabelOverall"
+	{
+		"en"		"Overall"
+		"ru"		"Overall"
+		"chi"		"综合"
+	}
+
+	"GOKZTop_Menu_LabelGameplay"
+	{
+		"en"		"Gameplay"
+		"ru"		"Gameplay"
+		"chi"		"玩法"
+	}
+
+	"GOKZTop_Menu_LabelVisuals"
+	{
+		"en"		"Visuals"
+		"ru"		"Visuals"
+		"chi"		"画面"
+	}
+
+	"GOKZTop_Menu_AvgOverall"
+	{
+		"en"		"Avg Overall"
+		"ru"		"Сред. Overall"
+		"chi"		"平均综合"
+	}
+
+	"GOKZTop_Menu_AvgGameplay"
+	{
+		"en"		"Avg Gameplay"
+		"ru"		"Сред. Gameplay"
+		"chi"		"平均玩法"
+	}
+
+	"GOKZTop_Menu_AvgVisuals"
+	{
+		"en"		"Avg Visuals"
+		"ru"		"Сред. Visuals"
+		"chi"		"平均画面"
+	}
+
+	"GOKZTop_Menu_SubRateTitle"
+	{
+		"#format"	"{1:s}"
+		"en"		"Rate {1} (1-5)"
+		"ru"		"Оценить {1} (1-5)"
+		"chi"		"为 {1} 评分（1-5）"
+	}
+
+	"GOKZTop_Menu_CommentsTitle"
+	{
+		"#format"	"{1:s}"
+		"en"		"【{1}】Latest gokz.top comments"
+		"ru"		"【{1}】Последние комментарии gokz.top"
+		"chi"		"【{1}】gokz.top 最新评论"
+	}
+
+	"GOKZTop_NoCommentsYet"
+	{
+		"en"		"No comments yet"
+		"ru"		"Комментариев пока нет"
+		"chi"		"暂无评论"
+	}
+
+	"GOKZTop_RatingSaved"
+	{
+		"en"		"{lime}Rating saved on gokz.top"
+		"ru"		"{lime}Оценка сохранена на gokz.top"
+		"chi"		"{lime}评分已保存到 gokz.top"
+	}
+
+	"GOKZTop_CommentSaved"
+	{
+		"en"		"{lime}Comment saved on gokz.top"
+		"ru"		"{lime}Комментарий сохранён на gokz.top"
+		"chi"		"{lime}评论已保存到 gokz.top"
+	}
+
+	"GOKZTop_NoRatingsYet"
+	{
+		"#format"	"{1:s}"
+		"en"		"{yellow}{1}{default} has no ratings yet. Use {gold}!rate{default} to be the first."
+		"ru"		"{yellow}{1}{default} пока без оценок. Используйте {gold}!rate{default}, чтобы быть первым."
+		"chi"		"{yellow}{1}{default} 暂无评分。使用 {gold}!rate{default} 成为第一个评分的人。"
+	}
+
+	"GOKZTop_NonJsonResponse"
+	{
+		"#format"	"{1:d}"
+		"en"		"{red}HTTP error ({1}). Non-JSON response. Check {gold}gokztop_base_url{red}."
+		"ru"		"{red}HTTP ошибка ({1}). Ответ не JSON. Проверьте {gold}gokztop_base_url{red}."
+		"chi"		"{red}HTTP 错误（{1}）。返回不是 JSON。请检查 {gold}gokztop_base_url{red}。"
+	}
+
+	"GOKZTop_HttpErrorGeneric"
+	{
+		"#format"	"{1:d}"
+		"en"		"{red}HTTP error ({1}). Try again later."
+		"ru"		"{red}HTTP ошибка ({1}). Попробуйте позже."
+		"chi"		"{red}HTTP 错误（{1}）。请稍后再试。"
+	}
+
+	"GOKZTop_FailedCreateRequest"
+	{
+		"en"		"{red}Failed to create HTTP request"
+		"ru"		"{red}Не удалось создать HTTP запрос"
+		"chi"		"{red}无法创建 HTTP 请求"
+	}
+
+	"GOKZTop_MissingApiKey"
+	{
+		"en"		"{red}Server gokz.top API key not configured (cfg/sourcemod/gokztop/apikey.cfg)"
+		"ru"		"{red}API ключ gokz.top не настроен (cfg/sourcemod/gokztop/apikey.cfg)"
+		"chi"		"{red}服务器未配置 gokz.top API 密钥（cfg/sourcemod/gokztop/apikey.cfg）"
+	}
+
+	"GOKZTop_SteamIdNotReady"
+	{
+		"en"		"{red}Could not read your SteamID64 yet"
+		"ru"		"{red}Пока не удалось получить ваш SteamID64"
+		"chi"		"{red}暂时无法获取你的 SteamID64"
+	}
+}
+
+

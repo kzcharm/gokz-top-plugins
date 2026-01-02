@@ -6,6 +6,8 @@
 #include <sourcemod>
 #include <SteamWorks>
 
+#define MODE_COUNT 3
+
 /**
  * Shared helper include for GOKZ Top plugins.
  *
@@ -294,5 +296,133 @@ stock bool GOKZTop_ReadResponseBody(Handle req, char[] out, int maxlen)
     out[size] = '\0';
     return ok;
 }
+
+/**
+ * Get mode string for API (KZT, SKZ, VNL).
+ * 
+ * @param mode      GOKZ mode (0=Vanilla/VNL, 1=Simple/SKZ, 2=Timer/KZT)
+ * @param out       Output buffer
+ * @param maxlen    Output buffer size
+ * @return          True if mode is valid, false otherwise
+ */
+stock bool GOKZTop_GetModeString(int mode, char[] out, int maxlen)
+{
+    switch (mode)
+    {
+        case 0: // Vanilla/VNL
+        {
+            strcopy(out, maxlen, "VNL");
+            return true;
+        }
+        case 1: // Simple/SKZ
+        {
+            strcopy(out, maxlen, "SKZ");
+            return true;
+        }
+        case 2: // Timer/KZT
+        {
+            strcopy(out, maxlen, "KZT");
+            return true;
+        }
+        default:
+        {
+            out[0] = '\0';
+            return false;
+        }
+    }
+}
+
+/**
+ * Create an HTTP request to fetch leaderboard data (rank and rating) for a player.
+ * The caller must set the HTTP callbacks using SteamWorks_SetHTTPCallbacks before sending.
+ * 
+ * @param steamid64     Player's SteamID64
+ * @param mode          GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @param userid        User ID to store in context (retrieved via data1 & 0xFFFF)
+ * @param timeoutSec    Request timeout in seconds (default: 15)
+ * @return              Request handle or INVALID_HANDLE on failure
+ */
+stock Handle GOKZTop_FetchLeaderboardData(const char[] steamid64, int mode, int userid = 0, int timeoutSec = 15)
+{
+    char modeStr[8];
+    if (!GOKZTop_GetModeString(mode, modeStr, sizeof(modeStr)))
+    {
+        return INVALID_HANDLE;
+    }
+
+    char path[128];
+    Format(path, sizeof(path), "/leaderboards/%s", steamid64);
+
+    char query[32];
+    Format(query, sizeof(query), "mode=%s", modeStr);
+
+    char url[1024];
+    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path, query))
+    {
+        return INVALID_HANDLE;
+    }
+
+    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, false, timeoutSec);
+    if (req == INVALID_HANDLE)
+    {
+        return INVALID_HANDLE;
+    }
+
+    // Store mode in context value (lower 16 bits = userid, upper 16 bits = mode)
+    int contextValue = userid | (mode << 16);
+    SteamWorks_SetHTTPRequestContextValue(req, contextValue, 0);
+
+    return req;
+}
+
+/**
+ * Get player's rating for a specific mode.
+ * Requires gokz-top-core plugin.
+ * 
+ * @param client    Client index
+ * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @return          Rating value (0.0 if not loaded or invalid)
+ */
+native float GOKZTop_GetRating(int client, int mode);
+
+/**
+ * Get player's rank for a specific mode.
+ * Requires gokz-top-core plugin.
+ * 
+ * @param client    Client index
+ * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @return          Rank value (0 if not ranked or not loaded)
+ */
+native int GOKZTop_GetRank(int client, int mode);
+
+/**
+ * Check if leaderboard data is loaded for a player and mode.
+ * Requires gokz-top-core plugin.
+ * 
+ * @param client    Client index
+ * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @return          True if data is loaded, false otherwise
+ */
+native bool GOKZTop_IsLeaderboardDataLoaded(int client, int mode);
+
+/**
+ * Refresh leaderboard data for a player and mode.
+ * Requires gokz-top-core plugin.
+ * 
+ * @param client    Client index
+ * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @return          True on success, false on failure
+ */
+native bool GOKZTop_RefreshLeaderboardData(int client, int mode);
+
+/**
+ * Forward called when leaderboard data is fetched for a player.
+ * 
+ * @param client    Client index
+ * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @param rating    Player's rating
+ * @param rank      Player's rank (0 if not ranked)
+ */
+forward void GOKZTop_OnLeaderboardDataFetched(int client, int mode, float rating, int rank);
 
 

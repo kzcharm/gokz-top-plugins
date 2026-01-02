@@ -1,10 +1,10 @@
-// gokztop-core
+// gokz-top-core
 // Shared core plugin for GOKZ Top SourceMod plugins.
 //
 // Responsibilities:
 // - Provide ConVars:
-//   - gokztop_base_url (in cfg/sourcemod/gokztop/gokztop-core.cfg)
-//   - gokztop_apikey   (in cfg/sourcemod/gokztop/apikey.cfg)
+//   - gokz_top_base_url (in cfg/sourcemod/gokz-top/gokz-top-core.cfg)
+//   - gokz_top_apikey   (in cfg/sourcemod/gokz-top/apikey.cfg)
 // - Ensure both config files exist (AutoExecConfig)
 
 #include <sourcemod>
@@ -17,7 +17,7 @@ public Plugin myinfo =
 {
     name        = "GOKZTop Core",
     author      = "Cinyan10",
-    description = "Core utilities/config for gokztop plugins",
+    description = "Core utilities/config for gokz-top plugins",
     version     = "0.1.0"
 };
 
@@ -26,15 +26,15 @@ static ConVar gCvarApiKey;
 
 public void OnPluginStart()
 {
-    // Set up main config file: cfg/sourcemod/gokztop/gokztop-core.cfg
-    // Note: AutoExecConfig_SetCreateDirectory will create cfg/sourcemod/gokztop/
+    // Set up main config file: cfg/sourcemod/gokz-top/gokz-top-core.cfg
+    // Note: AutoExecConfig_SetCreateDirectory will create cfg/sourcemod/gokz-top/
     // since cfg/sourcemod/ should already exist
-    AutoExecConfig_SetFile("gokztop-core", "sourcemod/gokztop");
+    AutoExecConfig_SetFile("gokz-top-core", "sourcemod/gokz-top");
     AutoExecConfig_SetCreateFile(true);
     AutoExecConfig_SetCreateDirectory(true);
 
     gCvarBaseUrl = AutoExecConfig_CreateConVar(
-        "gokztop_base_url",
+        "gokz_top_base_url",
         "https://api.gokz.top",
         "Base URL for GOKZTop API (no trailing slash recommended)",
         FCVAR_PROTECTED
@@ -44,15 +44,15 @@ public void OnPluginStart()
     AutoExecConfig_ExecuteFile();
     AutoExecConfig_CleanFile();
 
-    // Set up API key config file: cfg/sourcemod/gokztop/apikey.cfg
-    AutoExecConfig_SetFile("apikey", "sourcemod/gokztop");
+    // Set up API key config file: cfg/sourcemod/gokz-top/apikey.cfg
+    AutoExecConfig_SetFile("apikey", "sourcemod/gokz-top");
     AutoExecConfig_SetCreateFile(true);
     AutoExecConfig_SetCreateDirectory(true);
 
     gCvarApiKey = AutoExecConfig_CreateConVar(
-        "gokztop_apikey",
+        "gokz_top_apikey",
         "",
-        "GOKZTop API key used by server-side plugins. Set in cfg/sourcemod/gokztop/apikey.cfg",
+        "GOKZTop API key used by server-side plugins. Set in cfg/sourcemod/gokz-top/apikey.cfg",
         FCVAR_PROTECTED
     );
 
@@ -61,8 +61,8 @@ public void OnPluginStart()
     AutoExecConfig_CleanFile();
 
     // Optional: execute both configs explicitly to ensure they apply even if autoexec is disabled.
-    ServerCommand("exec sourcemod/gokztop/gokztop-core.cfg");
-    ServerCommand("exec sourcemod/gokztop/apikey.cfg");
+    ServerCommand("exec sourcemod/gokz-top/gokz-top-core.cfg");
+    ServerCommand("exec sourcemod/gokz-top/apikey.cfg");
 
     // Gentle hint if missing
     CreateTimer(3.0, Timer_AnnounceIfMissing, _, TIMER_FLAG_NO_MAPCHANGE);
@@ -77,7 +77,7 @@ public Action Timer_AnnounceIfMissing(Handle timer)
         TrimString(apiKey);
         if (apiKey[0] == '\0')
         {
-            LogMessage("[gokztop-core] API key not set. Edit cfg/sourcemod/gokztop/apikey.cfg and set gokztop_apikey.");
+            LogMessage("[gokz-top-core] API key not set. Edit cfg/sourcemod/gokz-top/apikey.cfg and set gokz_top_apikey.");
         }
     }
     return Plugin_Stop;

@@ -10,7 +10,7 @@
 #include <SteamWorks>
 #include <smjansson>
 
-#include <gokztop>
+#include <gokz-top>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -19,18 +19,16 @@ public Plugin myinfo =
 {
     name        = "GOKZ.TOP Map Ratings",
     author      = "Cinyan10",
-    description = "Rate maps (visuals/overall/gameplay) and leave a comment via gokz.top API",
-    version     = "2.0.0"
+    description = "Rate maps (visuals/overall/gameplay) and leave a review comment via gokz.top API",
+    version     = "3.0.0"
 };
 
 enum
 {
-    Req_AggregatedRatings = 1,
-    Req_MyRatings,
-    Req_SubmitRating,
-    Req_SubmitComment,
-    Req_FetchComments,
-    Req_FetchCommentsCount
+    Req_MapReviewsSummary = 1,
+    Req_MyReview,
+    Req_SubmitReview,
+    Req_FetchComments
 };
 
 enum
@@ -47,34 +45,49 @@ static const char g_AspectNames[][] =
     "gameplay"
 };
 
+// Global reusable prefix
+static const char GOKZTOP_PREFIX[] = "{gold}GOKZ.TOP {grey}| ";
+
 static bool g_bRateReminderSent[MAXPLAYERS + 1];
 static bool g_bRatePromptPending[MAXPLAYERS + 1];
 static float g_fRatePromptRequestedAt[MAXPLAYERS + 1];
 static int g_iActiveAspectMenu[MAXPLAYERS + 1];
 static bool g_bCaptureComment[MAXPLAYERS + 1];
 static bool g_bMenuPending[MAXPLAYERS + 1];
-static int g_iCommentsCount[MAXPLAYERS + 1];
-static bool g_bCommentsCountFetched[MAXPLAYERS + 1];
-static bool g_bAggregatedRatingsFetched[MAXPLAYERS + 1];
-static bool g_bMyRatingsFetched[MAXPLAYERS + 1];
+static bool g_bSubmitInFlight[MAXPLAYERS + 1];
+static int g_iSubmitPendingFlags[MAXPLAYERS + 1];
+static bool g_bReopenMenuAfterSubmit[MAXPLAYERS + 1];
+static int g_iSummaryPrintAttempts[MAXPLAYERS + 1];
 
 // Cached aggregated ratings (per-map; updated on fetch)
 static char g_sCachedMapName[PLATFORM_MAX_PATH];
 static float g_fAvgRating[3];
 static int g_iAvgCount[3];
+static int g_iMapCommentCount = -1;
+static bool g_bSummaryFetched = false;
+static bool g_bSummaryFetchInFlight = false;
 
 // Per-player last known ratings (0=unknown/unset)
 static int g_iMyRating[MAXPLAYERS + 1][3];
-static float g_fLastMyRatingsFetchAt[MAXPLAYERS + 1];
+static char g_sMyComment[MAXPLAYERS + 1][256];
+static bool g_bMyReviewFetched[MAXPLAYERS + 1];
+static float g_fLastMyReviewFetchAt[MAXPLAYERS + 1];
+
+// Per-player draft (menu edits). Only dirty fields are submitted.
+static int g_iDraftRating[MAXPLAYERS + 1][3];
+static bool g_bDraftDirtyRating[MAXPLAYERS + 1][3];
+static char g_sDraftComment[MAXPLAYERS + 1][256];
+static bool g_bDraftDirtyComment[MAXPLAYERS + 1];
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Lifecycle
 // ──────────────────────────────────────────────────────────────────────────────
 public void OnPluginStart()
 {
-    LoadTranslations("gokztop-map-ratings.phrases");
+    LoadTranslations("gokz-top-map-ratings.phrases");
 
     RegConsoleCmd("sm_rate", Command_Rate, "Usage: !rate [<1-5>|<aspect> <1-5>] [comment]");
+    RegConsoleCmd("sm_review", Command_Rate, "Alias for !rate (opens review menu)");
     RegConsoleCmd("sm_comments", Command_Comments, "Show latest gokz.top comments for this map");
 
     AddCommandListener(Command_Say, "say");
@@ -90,14 +103,24 @@ public void OnMapStart()
         g_fRatePromptRequestedAt[i] = 0.0;
         g_bCaptureComment[i] = false;
         g_bMenuPending[i] = false;
-        g_iCommentsCount[i] = -1;
-        g_bCommentsCountFetched[i] = false;
-        g_bAggregatedRatingsFetched[i] = false;
-        g_bMyRatingsFetched[i] = false;
+        g_bSubmitInFlight[i] = false;
+        g_iSubmitPendingFlags[i] = 0;
+        g_bReopenMenuAfterSubmit[i] = false;
+        g_iSummaryPrintAttempts[i] = 0;
+        g_bMyReviewFetched[i] = false;
         g_iMyRating[i][0] = 0;
         g_iMyRating[i][1] = 0;
         g_iMyRating[i][2] = 0;
-        g_fLastMyRatingsFetchAt[i] = 0.0;
+        g_sMyComment[i][0] = '\0';
+        g_fLastMyReviewFetchAt[i] = 0.0;
+
+        for (int a = 0; a < 3; a++)
+        {
+            g_iDraftRating[i][a] = 0;
+            g_bDraftDirtyRating[i][a] = false;
+        }
+        g_sDraftComment[i][0] = '\0';
+        g_bDraftDirtyComment[i] = false;
     }
 
     g_sCachedMapName[0] = '\0';
@@ -106,6 +129,13 @@ public void OnMapStart()
         g_fAvgRating[a] = -1.0;
         g_iAvgCount[a] = 0;
     }
+
+    g_iMapCommentCount = -1;
+    g_bSummaryFetched = false;
+    g_bSummaryFetchInFlight = false;
+
+    // Fetch map review summary once per map.
+    FetchMapReviewsSummary();
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -114,14 +144,24 @@ public void OnMapStart()
 public void GOKZ_OnFirstSpawn(int client)
 {
     if (!IsValidClient(client)) return;
-    CreateTimer(2.0, Timer_FetchAvg, GetClientUserId(client));
+    CreateTimer(2.0, Timer_PrintSummary, GetClientUserId(client));
 }
 
-public Action Timer_FetchAvg(Handle timer, any userid)
+public Action Timer_PrintSummary(Handle timer, any userid)
 {
     int client = GetClientOfUserId(userid);
     if (!IsValidClient(client)) return Plugin_Stop;
-    FetchAggregatedRatings(client);
+    if (!g_bSummaryFetched)
+    {
+        if (!g_bSummaryFetchInFlight) FetchMapReviewsSummary();
+        if (g_iSummaryPrintAttempts[client] < 3)
+        {
+            g_iSummaryPrintAttempts[client]++;
+            CreateTimer(2.0, Timer_PrintSummary, userid);
+        }
+        return Plugin_Stop;
+    }
+    PrintMapReviewsSummary(client);
     return Plugin_Stop;
 }
 
@@ -142,25 +182,19 @@ public Action Timer_PromptRateIfNeeded(Handle timer, any userid)
     int client = GetClientOfUserId(userid);
     if (!IsValidClient(client)) return Plugin_Stop;
 
-    // Only prompt if we can determine the player has not rated this map yet.
-    // We do this by fetching their ratings and then deciding in Req_MyRatings.
-    if (!GOKZTop_IsConfigured())
-    {
-        return Plugin_Stop;
-    }
-
-    // If we already know they rated something (any aspect), don't remind.
-    if (g_iMyRating[client][Aspect_Overall] > 0
+    // Only prompt if we can determine the player has not reviewed this map yet.
+    // We do this by fetching their existing review and then deciding in Req_MyReview.
+    bool hasAny =
+        (g_iMyRating[client][Aspect_Overall] > 0
         || g_iMyRating[client][Aspect_Gameplay] > 0
-        || g_iMyRating[client][Aspect_Visuals] > 0)
-    {
-        return Plugin_Stop;
-    }
+        || g_iMyRating[client][Aspect_Visuals] > 0
+        || g_sMyComment[client][0] != '\0');
+    if (hasAny) return Plugin_Stop;
 
     // Mark pending and fetch ratings now (forced), then decide when the response arrives.
     g_bRatePromptPending[client] = true;
     g_fRatePromptRequestedAt[client] = GetGameTime();
-    FetchMyRatings(client, true);
+    FetchMyReview(client, true);
     return Plugin_Stop;
 }
 
@@ -174,16 +208,15 @@ public Action Command_Rate(int client, int args)
 
     if (args == 0)
     {
-        // Fetch all data needed for menu, then show menu when ready
+        // Fetch player review (prefill) and ensure summary is available, then show menu when ready
         g_bMenuPending[client] = true;
-        g_bAggregatedRatingsFetched[client] = false;
-        g_bMyRatingsFetched[client] = false;
-        g_bCommentsCountFetched[client] = false;
-        g_iCommentsCount[client] = -1;
-        
-        FetchAggregatedRatings(client);
-        FetchMyRatingsIfNeeded(client);
-        FetchCommentsCount(client);
+        g_bMyReviewFetched[client] = false;
+
+        if (!g_bSummaryFetched && !g_bSummaryFetchInFlight)
+        {
+            FetchMapReviewsSummary();
+        }
+        FetchMyReview(client, true);
         return Plugin_Handled;
     }
 
@@ -199,18 +232,21 @@ public Action Command_Rate(int client, int args)
             GOKZ_PlayErrorSound(client);
             char msg[256];
             FormatEx(msg, sizeof(msg), "%T", "GOKZTop_RatingRangeError", client);
-            GOKZ_PrintToChat(client, true, "%s", msg);
+            GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
             return Plugin_Handled;
         }
 
         char comment[256];
         ExtractTailComment(args, 1, comment, sizeof(comment));
-
-        SubmitRating(client, Aspect_Overall, rating);
+        ResetDraft(client);
+        g_iDraftRating[client][Aspect_Overall] = rating;
+        g_bDraftDirtyRating[client][Aspect_Overall] = true;
         if (comment[0] != '\0')
         {
-            SubmitComment(client, comment);
+            strcopy(g_sDraftComment[client], sizeof(g_sDraftComment[]), comment);
+            g_bDraftDirtyComment[client] = true;
         }
+        SubmitDraftReview(client);
 
         return Plugin_Handled;
     }
@@ -224,7 +260,7 @@ public Action Command_Rate(int client, int args)
             GOKZ_PlayErrorSound(client);
             char msg[256];
             FormatEx(msg, sizeof(msg), "%T", "GOKZTop_UnknownAspect", client);
-            GOKZ_PrintToChat(client, true, "%s", msg);
+            GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
             return Plugin_Handled;
         }
 
@@ -235,7 +271,7 @@ public Action Command_Rate(int client, int args)
             GOKZ_PlayErrorSound(client);
             char msg[256];
             FormatEx(msg, sizeof(msg), "%T", "GOKZTop_RateAspectUsage", client);
-            GOKZ_PrintToChat(client, true, "%s", msg);
+            GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
             return Plugin_Handled;
         }
 
@@ -245,18 +281,21 @@ public Action Command_Rate(int client, int args)
             GOKZ_PlayErrorSound(client);
             char msg[256];
             FormatEx(msg, sizeof(msg), "%T", "GOKZTop_RatingRangeError", client);
-            GOKZ_PrintToChat(client, true, "%s", msg);
+            GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
             return Plugin_Handled;
         }
 
         char comment[256];
         ExtractTailComment(args, 2, comment, sizeof(comment));
-
-        SubmitRating(client, aspect, rating);
+        ResetDraft(client);
+        g_iDraftRating[client][aspect] = rating;
+        g_bDraftDirtyRating[client][aspect] = true;
         if (comment[0] != '\0')
         {
-            SubmitComment(client, comment);
+            strcopy(g_sDraftComment[client], sizeof(g_sDraftComment[]), comment);
+            g_bDraftDirtyComment[client] = true;
         }
+        SubmitDraftReview(client);
 
         return Plugin_Handled;
     }
@@ -264,7 +303,7 @@ public Action Command_Rate(int client, int args)
     {
         char msg[256];
         FormatEx(msg, sizeof(msg), "%T", "GOKZTop_RateUsage", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
     }
     return Plugin_Handled;
 }
@@ -289,28 +328,55 @@ public Action Command_Say(int client, const char[] command, int argc)
     if (msg[0] == '\0')
         return Plugin_Handled;
 
+    // Handle cancel commands
     if (StrEqual(msg, "!cancel", false) || StrEqual(msg, "/cancel", false))
     {
         g_bCaptureComment[client] = false;
         char t[256];
         FormatEx(t, sizeof(t), "%T", "GOKZTop_CommentCancelled", client);
-        GOKZ_PrintToChat(client, true, "%s", t);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, t);
+        ShowRateMenu_Main(client);
         return Plugin_Handled;
+    }
+
+    // Filter out commands starting with !, /, . and "rtv" (case-insensitive)
+    char firstChar = msg[0];
+    if (firstChar == '!' || firstChar == '/' || firstChar == '.')
+    {
+        // Let the command go through normally
+        return Plugin_Continue;
+    }
+    
+    // Check if message starts with "rtv" (case-insensitive)
+    if (strlen(msg) >= 3)
+    {
+        char first = msg[0];
+        char second = msg[1];
+        char third = msg[2];
+        if ((first == 'r' || first == 'R') && 
+            (second == 't' || second == 'T') && 
+            (third == 'v' || third == 'V'))
+        {
+            // Let the command go through normally
+            return Plugin_Continue;
+        }
     }
 
     g_bCaptureComment[client] = false;
 
-    SubmitComment(client, msg);
-    // Refresh menu data and show menu
-    g_bMenuPending[client] = true;
-    g_bAggregatedRatingsFetched[client] = false;
-    g_bMyRatingsFetched[client] = false;
-    g_bCommentsCountFetched[client] = false;
-    g_iCommentsCount[client] = -1;
-    
-    FetchAggregatedRatings(client);
-    FetchMyRatingsIfNeeded(client);
-    FetchCommentsCount(client);
+    // Store draft comment and submit review immediately (comment submit path)
+    strcopy(g_sDraftComment[client], sizeof(g_sDraftComment[]), msg);
+    g_bDraftDirtyComment[client] = true;
+    SubmitDraftReview(client);
+    if (g_bSubmitInFlight[client])
+    {
+        g_bReopenMenuAfterSubmit[client] = true;
+    }
+    else
+    {
+        // If we didn't submit (e.g. missing API key), reopen menu so the player isn't left hanging.
+        ShowRateMenu_Main(client);
+    }
 
     return Plugin_Handled;
 }
@@ -380,18 +446,23 @@ static void ShowRateMenu_Main(int client)
     // Format view comments with count
     char viewCommentsText[128];
     FormatEx(viewCommentsText, sizeof(viewCommentsText), "%T", "GOKZTop_Menu_ViewComments", client);
-    if (g_iCommentsCount[client] >= 0)
+    if (g_iMapCommentCount >= 0)
     {
-        Format(viewCommentsText, sizeof(viewCommentsText), "%s (%d)", viewCommentsText, g_iCommentsCount[client]);
+        Format(viewCommentsText, sizeof(viewCommentsText), "%s (%d)", viewCommentsText, g_iMapCommentCount);
     }
     
     // Disable view comments if no comments available
     int drawStyle = ITEMDRAW_DEFAULT;
-    if (g_iCommentsCount[client] <= 0)
+    if (g_iMapCommentCount == 0)
     {
         drawStyle = ITEMDRAW_DISABLED;
     }
     menu.AddItem("view_comments", viewCommentsText, drawStyle);
+    
+    // Add submit review menu item
+    char submitText[128];
+    FormatEx(submitText, sizeof(submitText), "%T", "GOKZTop_Menu_SubmitReview", client);
+    menu.AddItem("submit_review", submitText);
 
     menu.Display(client, 0);
 }
@@ -401,6 +472,16 @@ public int MenuHandler_RateMain(Menu menu, MenuAction action, int client, int it
     if (action == MenuAction_End)
     {
         delete menu;
+        return 0;
+    }
+
+    if (action == MenuAction_Cancel)
+    {
+        // Exit button: submit draft review if player changed anything in this menu session.
+        if (item == MenuCancel_Exit)
+        {
+            SubmitDraftReview(client);
+        }
         return 0;
     }
 
@@ -429,11 +510,19 @@ public int MenuHandler_RateMain(Menu menu, MenuAction action, int client, int it
         g_bCaptureComment[client] = true;
         char msg[256];
         FormatEx(msg, sizeof(msg), "%T", "GOKZTop_CommentPrompt", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
+        char cancelMsg[256];
+        FormatEx(cancelMsg, sizeof(cancelMsg), "%T", "GOKZTop_CommentCancelHint", client);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, cancelMsg);
     }
     else if (StrEqual(info, "view_comments"))
     {
         FetchComments(client);
+    }
+    else if (StrEqual(info, "submit_review"))
+    {
+        SubmitDraftReview(client);
+        ShowRateMenu_Main(client);
     }
 
     return 0;
@@ -485,6 +574,11 @@ public int MenuHandler_RateAspect(Menu menu, MenuAction action, int client, int 
         {
             ShowRateMenu_Main(client);
         }
+        else if (item == MenuCancel_Exit)
+        {
+            // Exiting from a sub-menu still counts as quitting the menu flow.
+            SubmitDraftReview(client);
+        }
         return 0;
     }
 
@@ -497,43 +591,163 @@ public int MenuHandler_RateAspect(Menu menu, MenuAction action, int client, int 
     int idx = g_iActiveAspectMenu[client];
     if (idx < 0 || idx > 2) idx = 0;
 
-    SubmitRating(client, idx, rating);
-    // Refresh menu data and show menu when ready
-    g_bMenuPending[client] = true;
-    g_bAggregatedRatingsFetched[client] = false;
-    g_bMyRatingsFetched[client] = false;
-    g_bCommentsCountFetched[client] = false;
-    g_iCommentsCount[client] = -1;
-    
-    FetchAggregatedRatings(client);
-    FetchMyRatingsIfNeeded(client);
-    FetchCommentsCount(client);
+    g_iDraftRating[client][idx] = rating;
+    g_bDraftDirtyRating[client][idx] = true;
+    ShowRateMenu_Main(client);
     return 0;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // API calls
 // ──────────────────────────────────────────────────────────────────────────────
-static void FetchAggregatedRatings(int client)
+static void ResetDraft(int client)
 {
+    if (client <= 0 || client > MaxClients) return;
+    for (int a = 0; a < 3; a++)
+    {
+        g_iDraftRating[client][a] = 0;
+        g_bDraftDirtyRating[client][a] = false;
+    }
+    g_sDraftComment[client][0] = '\0';
+    g_bDraftDirtyComment[client] = false;
+}
+
+static void InitDraftFromMyReview(int client)
+{
+    if (client <= 0 || client > MaxClients) return;
+    for (int a = 0; a < 3; a++)
+    {
+        g_iDraftRating[client][a] = g_iMyRating[client][a];
+        g_bDraftDirtyRating[client][a] = false;
+    }
+    strcopy(g_sDraftComment[client], sizeof(g_sDraftComment[]), g_sMyComment[client]);
+    g_bDraftDirtyComment[client] = false;
+}
+
+static void FetchMapReviewsSummary()
+{
+    if (g_bSummaryFetchInFlight) return;
+    g_bSummaryFetchInFlight = true;
+
     char mapName[PLATFORM_MAX_PATH];
     GetCurrentMapDisplayName(mapName, sizeof(mapName));
 
     char mapEnc[PLATFORM_MAX_PATH * 3];
     GOKZTop_UrlEncode(mapName, mapEnc, sizeof(mapEnc));
 
-    char path[512];
-    Format(path, sizeof(path), "/maps/%s/ratings/aggregated", mapEnc);
+    char path[128];
+    strcopy(path, sizeof(path), "/maps/reviews/summary");
 
-    char url[768];
-    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path))
+    char query[768];
+    Format(query, sizeof(query), "map_name=%s&limit=1&offset=0", mapEnc);
+
+    char url[1024];
+    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path, query))
     {
-        // keep this one hardcoded for now (core missing is not translation-dependent)
-        GOKZ_PrintToChat(client, true, "{red}GOKZTop base URL not configured (gokztop-core missing?)");
-        // If menu is pending, mark as fetched anyway
+        g_bSummaryFetchInFlight = false;
+        return;
+    }
+
+    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, false, 15);
+    if (req == INVALID_HANDLE)
+    {
+        g_bSummaryFetchInFlight = false;
+        return;
+    }
+
+    SteamWorks_SetHTTPRequestContextValue(req, 0, Req_MapReviewsSummary);
+    SteamWorks_SetHTTPCallbacks(req, OnHTTPCompleted);
+    SteamWorks_SendHTTPRequest(req);
+}
+
+static void PrintMapReviewsSummary(int client)
+{
+    if (!IsValidClient(client)) return;
+
+    if (!g_bSummaryFetched)
+    {
+        if (!g_bSummaryFetchInFlight) FetchMapReviewsSummary();
+        return;
+    }
+
+    char mapName[PLATFORM_MAX_PATH];
+    GetCurrentMapDisplayName(mapName, sizeof(mapName));
+
+    // Print three lines, one for each aspect, in order: overall, gameplay, visuals
+    char header[160];
+    Format(header, sizeof(header), "{lime}%s{default} reviews summary:", mapName);
+    GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, header);
+
+    bool bAny = false;
+    int order[3] = {Aspect_Overall, Aspect_Gameplay, Aspect_Visuals};
+    for (int i = 0; i < 3; i++)
+    {
+        int idx = order[i];
+        if (g_iAvgCount[idx] <= 0 || g_fAvgRating[idx] < 0.0) continue;
+        bAny = true;
+        char stars[16];
+        BuildStarsFloat(g_fAvgRating[idx], stars, sizeof(stars));
+        char line[256];
+        Format(line, sizeof(line), "  {gold}%s{default} %.2f %s ({gold}%d{default})", g_AspectNames[idx], g_fAvgRating[idx], stars, g_iAvgCount[idx]);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, line);
+    }
+    if (!bAny)
+    {
+        char msg[256];
+        FormatEx(msg, sizeof(msg), "%T", "GOKZTop_NoRatingsYet", client, mapName);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
+    }
+    else if (g_iMapCommentCount >= 0)
+    {
+        char cLine[128];
+        Format(cLine, sizeof(cLine), "  {gold}comments{default}: {gold}%d{default}", g_iMapCommentCount);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, cLine);
+    }
+}
+
+static void FetchMyReview(int client, bool force)
+{
+    float now = GetGameTime();
+    if (!force && (now - g_fLastMyReviewFetchAt[client] < 10.0))
+    {
         if (g_bMenuPending[client])
         {
-            g_bAggregatedRatingsFetched[client] = true;
+            g_bMyReviewFetched[client] = true;
+            TryShowMenuWhenReady(client);
+        }
+        return;
+    }
+    g_fLastMyReviewFetchAt[client] = now;
+
+    char steamid64[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), true))
+    {
+        if (g_bMenuPending[client])
+        {
+            g_bMyReviewFetched[client] = true;
+            TryShowMenuWhenReady(client);
+        }
+        return;
+    }
+
+    char mapName[PLATFORM_MAX_PATH];
+    GetCurrentMapDisplayName(mapName, sizeof(mapName));
+
+    char mapEnc[PLATFORM_MAX_PATH * 3];
+    GOKZTop_UrlEncode(mapName, mapEnc, sizeof(mapEnc));
+
+    char path[128];
+    strcopy(path, sizeof(path), "/maps/reviews");
+
+    char query[256];
+    Format(query, sizeof(query), "map_name=%s&steamid64=%s&limit=1&offset=0", mapEnc, steamid64);
+
+    char url[1024];
+    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path, query))
+    {
+        if (g_bMenuPending[client])
+        {
+            g_bMyReviewFetched[client] = true;
             TryShowMenuWhenReady(client);
         }
         return;
@@ -542,30 +756,91 @@ static void FetchAggregatedRatings(int client)
     Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, false, 15);
     if (req == INVALID_HANDLE)
     {
-        char msg[256];
-        FormatEx(msg, sizeof(msg), "%T", "GOKZTop_FailedCreateRequest", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
-        // If menu is pending, mark as fetched anyway
         if (g_bMenuPending[client])
         {
-            g_bAggregatedRatingsFetched[client] = true;
+            g_bMyReviewFetched[client] = true;
             TryShowMenuWhenReady(client);
         }
         return;
     }
 
-    SteamWorks_SetHTTPRequestContextValue(req, GetClientUserId(client), Req_AggregatedRatings);
+    SteamWorks_SetHTTPRequestContextValue(req, GetClientUserId(client), Req_MyReview);
     SteamWorks_SetHTTPCallbacks(req, OnHTTPCompleted);
     SteamWorks_SendHTTPRequest(req);
 }
 
-static void SubmitRating(int client, int aspect, int rating)
+static bool BuildDraftReviewBody(int client, char[] out, int maxlen, int &flags)
 {
+    flags = 0;
+    const int FLAG_OVERALL = (1 << 0);
+    const int FLAG_GAMEPLAY = (1 << 1);
+    const int FLAG_VISUALS = (1 << 2);
+    const int FLAG_COMMENT = (1 << 3);
+
+    bool first = true;
+    out[0] = '{';
+    out[1] = '\0';
+
+    if (g_bDraftDirtyRating[client][Aspect_Overall])
+    {
+        int rating = g_iDraftRating[client][Aspect_Overall];
+        if (IsValidRating(rating))
+        {
+            Format(out, maxlen, "%s\"overall\":%d", out, rating);
+            first = false;
+            flags |= FLAG_OVERALL;
+        }
+    }
+    if (g_bDraftDirtyRating[client][Aspect_Gameplay])
+    {
+        int rating = g_iDraftRating[client][Aspect_Gameplay];
+        if (IsValidRating(rating))
+        {
+            Format(out, maxlen, "%s%s\"gameplay\":%d", out, first ? "" : ",", rating);
+            first = false;
+            flags |= FLAG_GAMEPLAY;
+        }
+    }
+    if (g_bDraftDirtyRating[client][Aspect_Visuals])
+    {
+        int rating = g_iDraftRating[client][Aspect_Visuals];
+        if (IsValidRating(rating))
+        {
+            Format(out, maxlen, "%s%s\"visuals\":%d", out, first ? "" : ",", rating);
+            first = false;
+            flags |= FLAG_VISUALS;
+        }
+    }
+    if (g_bDraftDirtyComment[client] && g_sDraftComment[client][0] != '\0')
+    {
+        char esc[512];
+        GOKZTop_JsonEscapeString(g_sDraftComment[client], esc, sizeof(esc));
+        Format(out, maxlen, "%s%s\"comment\":\"%s\"", out, first ? "" : ",", esc);
+        first = false;
+        flags |= FLAG_COMMENT;
+    }
+
+    StrCat(out, maxlen, "}");
+    return flags != 0;
+}
+
+static void SubmitDraftReview(int client)
+{
+    if (!IsValidClient(client)) return;
+    if (g_bSubmitInFlight[client]) return;
+
     if (!GOKZTop_IsConfigured())
     {
         char msg[256];
         FormatEx(msg, sizeof(msg), "%T", "GOKZTop_MissingApiKey", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
+        return;
+    }
+
+    int flags = 0;
+    char body[1024];
+    if (!BuildDraftReviewBody(client, body, sizeof(body), flags))
+    {
         return;
     }
 
@@ -575,7 +850,7 @@ static void SubmitRating(int client, int aspect, int rating)
         GOKZ_PlayErrorSound(client);
         char msg[256];
         FormatEx(msg, sizeof(msg), "%T", "GOKZTop_SteamIdNotReady", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
         return;
     }
 
@@ -585,136 +860,34 @@ static void SubmitRating(int client, int aspect, int rating)
     char mapEnc[PLATFORM_MAX_PATH * 3];
     GOKZTop_UrlEncode(mapName, mapEnc, sizeof(mapEnc));
 
-    char path[512];
-    Format(path, sizeof(path), "/maps/%s/ratings", mapEnc);
+    char path[128];
+    strcopy(path, sizeof(path), "/maps/reviews");
 
-    char query[128];
-    Format(query, sizeof(query), "steamid64=%s", steamid64);
+    char query[256];
+    Format(query, sizeof(query), "map_name=%s&steamid64=%s", mapEnc, steamid64);
 
-    char url[768];
+    char url[1024];
     if (!GOKZTop_BuildApiUrl(url, sizeof(url), path, query))
     {
-        GOKZ_PrintToChat(client, true, "{red}GOKZTop base URL not configured (gokztop-core missing?)");
+        GOKZ_PrintToChat(client, false, "%s{red}GOKZTop base URL not configured (gokz-top-core missing?)", GOKZTOP_PREFIX);
         return;
     }
 
-    if (aspect < 0 || aspect > 2)
-    {
-        aspect = Aspect_Overall;
-    }
-
-    char body[128];
-    Format(body, sizeof(body), "{\"aspect\":\"%s\",\"rating\":%d}", g_AspectNames[aspect], rating);
-
-    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodPOST, url, true, 15);
+    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodPUT, url, true, 15);
     if (req == INVALID_HANDLE)
     {
         char msg[256];
         FormatEx(msg, sizeof(msg), "%T", "GOKZTop_FailedCreateRequest", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
+        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
         return;
     }
-
     GOKZTop_SetJsonBody(req, body);
 
-    int ctx2 = (Req_SubmitRating & 0xFF) | ((aspect & 0xFF) << 8) | ((rating & 0xFF) << 16);
+    g_bSubmitInFlight[client] = true;
+    g_iSubmitPendingFlags[client] = flags;
+
+    int ctx2 = (Req_SubmitReview & 0xFF) | ((flags & 0xFF) << 8);
     SteamWorks_SetHTTPRequestContextValue(req, GetClientUserId(client), ctx2);
-    SteamWorks_SetHTTPCallbacks(req, OnHTTPCompleted);
-    SteamWorks_SendHTTPRequest(req);
-}
-
-static void SubmitComment(int client, const char[] comment)
-{
-    if (!GOKZTop_IsConfigured())
-    {
-        char msg[256];
-        FormatEx(msg, sizeof(msg), "%T", "GOKZTop_MissingApiKey", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
-        return;
-    }
-
-    char steamid64[32];
-    if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), true))
-    {
-        GOKZ_PlayErrorSound(client);
-        char msg[256];
-        FormatEx(msg, sizeof(msg), "%T", "GOKZTop_SteamIdNotReady", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
-        return;
-    }
-
-    char mapName[PLATFORM_MAX_PATH];
-    GetCurrentMapDisplayName(mapName, sizeof(mapName));
-
-    char mapEnc[PLATFORM_MAX_PATH * 3];
-    GOKZTop_UrlEncode(mapName, mapEnc, sizeof(mapEnc));
-
-    char path[512];
-    Format(path, sizeof(path), "/maps/%s/comments", mapEnc);
-
-    char query[128];
-    Format(query, sizeof(query), "steamid64=%s", steamid64);
-
-    char url[768];
-    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path, query))
-    {
-        GOKZ_PrintToChat(client, true, "{red}GOKZTop base URL not configured (gokztop-core missing?)");
-        return;
-    }
-
-    char esc[512];
-    GOKZTop_JsonEscapeString(comment, esc, sizeof(esc));
-
-    char body[768];
-    Format(body, sizeof(body), "{\"comment\":\"%s\"}", esc);
-
-    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodPOST, url, true, 15);
-    if (req == INVALID_HANDLE)
-    {
-        char msg[256];
-        FormatEx(msg, sizeof(msg), "%T", "GOKZTop_FailedCreateRequest", client);
-        GOKZ_PrintToChat(client, true, "%s", msg);
-        return;
-    }
-
-    GOKZTop_SetJsonBody(req, body);
-
-    SteamWorks_SetHTTPRequestContextValue(req, GetClientUserId(client), Req_SubmitComment);
-    SteamWorks_SetHTTPCallbacks(req, OnHTTPCompleted);
-    SteamWorks_SendHTTPRequest(req);
-}
-
-static void FetchCommentsCount(int client)
-{
-    char mapName[PLATFORM_MAX_PATH];
-    GetCurrentMapDisplayName(mapName, sizeof(mapName));
-
-    char mapEnc[PLATFORM_MAX_PATH * 3];
-    GOKZTop_UrlEncode(mapName, mapEnc, sizeof(mapEnc));
-
-    char path[512];
-    Format(path, sizeof(path), "/maps/%s/comments", mapEnc);
-
-    char url[768];
-    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path))
-    {
-        // If base URL not configured, mark as fetched with 0 count
-        g_bCommentsCountFetched[client] = true;
-        g_iCommentsCount[client] = 0;
-        TryShowMenuWhenReady(client);
-        return;
-    }
-
-    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, false, 15);
-    if (req == INVALID_HANDLE)
-    {
-        g_bCommentsCountFetched[client] = true;
-        g_iCommentsCount[client] = 0;
-        TryShowMenuWhenReady(client);
-        return;
-    }
-
-    SteamWorks_SetHTTPRequestContextValue(req, GetClientUserId(client), Req_FetchCommentsCount);
     SteamWorks_SetHTTPCallbacks(req, OnHTTPCompleted);
     SteamWorks_SendHTTPRequest(req);
 }
@@ -727,20 +900,23 @@ static void FetchComments(int client)
     char mapEnc[PLATFORM_MAX_PATH * 3];
     GOKZTop_UrlEncode(mapName, mapEnc, sizeof(mapEnc));
 
-    char path[512];
-    Format(path, sizeof(path), "/maps/%s/comments", mapEnc);
+    char path[128];
+    strcopy(path, sizeof(path), "/maps/reviews");
 
-    char url[768];
-    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path))
+    char query[256];
+    Format(query, sizeof(query), "map_name=%s&comments_only=true&limit=10&offset=0&sort=latest", mapEnc);
+
+    char url[1024];
+    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path, query))
     {
-        GOKZ_PrintToChat(client, true, "{red}GOKZTop base URL not configured (gokztop-core missing?)");
+        GOKZ_PrintToChat(client, false, "%s{red}GOKZTop base URL not configured (gokz-top-core missing?)", GOKZTOP_PREFIX);
         return;
     }
 
     Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, false, 15);
     if (req == INVALID_HANDLE)
     {
-        GOKZ_PrintToChat(client, true, "{red}Failed to create HTTP request");
+                GOKZ_PrintToChat(client, false, "%s{red}Failed to create HTTP request", GOKZTOP_PREFIX);
         return;
     }
 
@@ -749,109 +925,11 @@ static void FetchComments(int client)
     SteamWorks_SendHTTPRequest(req);
 }
 
-static void FetchMyRatingsIfNeeded(int client)
-{
-        // If menu is pending, we need to ensure ratings are fetched
-        // So we'll mark as fetched if the fetch is skipped due to caching
-        if (g_bMenuPending[client])
-        {
-            float now = GetGameTime();
-            if (now - g_fLastMyRatingsFetchAt[client] < 10.0)
-            {
-                // Already cached, mark as fetched
-                g_bMyRatingsFetched[client] = true;
-                TryShowMenuWhenReady(client);
-            }
-        }
-    FetchMyRatings(client, false);
-}
-
-static void FetchMyRatings(int client, bool force)
-{
-    float now = GetGameTime();
-    if (!force)
-    {
-        if (now - g_fLastMyRatingsFetchAt[client] < 10.0)
-        {
-            // If menu is pending and we're using cached data, mark as fetched
-            if (g_bMenuPending[client])
-            {
-                g_bMyRatingsFetched[client] = true;
-                TryShowMenuWhenReady(client);
-            }
-            return;
-        }
-    }
-    g_fLastMyRatingsFetchAt[client] = now;
-
-    if (!GOKZTop_IsConfigured())
-    {
-        // If menu is pending but API not configured, mark as fetched anyway
-        if (g_bMenuPending[client])
-        {
-            g_bMyRatingsFetched[client] = true;
-            TryShowMenuWhenReady(client);
-        }
-        return;
-    }
-
-    char steamid64[32];
-    if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), true))
-    {
-        // If menu is pending but SteamID not ready, mark as fetched anyway
-        if (g_bMenuPending[client])
-        {
-            g_bMyRatingsFetched[client] = true;
-            TryShowMenuWhenReady(client);
-        }
-        return;
-    }
-
-    char mapName[PLATFORM_MAX_PATH];
-    GetCurrentMapDisplayName(mapName, sizeof(mapName));
-
-    char mapEnc[PLATFORM_MAX_PATH * 3];
-    GOKZTop_UrlEncode(mapName, mapEnc, sizeof(mapEnc));
-
-    char path[512];
-    Format(path, sizeof(path), "/maps/%s/ratings", mapEnc);
-
-    char query[128];
-    Format(query, sizeof(query), "steamid64=%s", steamid64);
-
-    char url[768];
-    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path, query))
-    {
-        // If menu is pending but URL build failed, mark as fetched anyway
-        if (g_bMenuPending[client])
-        {
-            g_bMyRatingsFetched[client] = true;
-            TryShowMenuWhenReady(client);
-        }
-        return;
-    }
-
-    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, true, 15);
-    if (req == INVALID_HANDLE)
-    {
-        // If menu is pending but request creation failed, mark as fetched anyway
-        if (g_bMenuPending[client])
-        {
-            g_bMyRatingsFetched[client] = true;
-            TryShowMenuWhenReady(client);
-        }
-        return;
-    }
-
-    SteamWorks_SetHTTPRequestContextValue(req, GetClientUserId(client), Req_MyRatings);
-    SteamWorks_SetHTTPCallbacks(req, OnHTTPCompleted);
-    SteamWorks_SendHTTPRequest(req);
-}
-
 public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any data1, any data2)
 {
     int userid = data1;
     int reqType = (data2 & 0xFF);
+    int reqFlags = (data2 >> 8) & 0xFF;
     int client = GetClientOfUserId(userid);
 
     int status = view_as<int>(eStatusCode);
@@ -864,181 +942,167 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
         delete hRequest;
     }
 
-    if (!client || !IsValidClient(client))
-    {
-        return;
-    }
-
     if (bFailure || !bRequestSuccessful || status < 200 || status >= 300)
     {
-        if (reqType == Req_MyRatings && client && IsValidClient(client) && g_bRatePromptPending[client])
+        // Map-level summary fetch has no client
+        if (reqType == Req_MapReviewsSummary)
+        {
+            g_bSummaryFetchInFlight = false;
+            return;
+        }
+
+        if (!client || !IsValidClient(client))
+        {
+            return;
+        }
+
+        if (reqType == Req_MyReview && g_bRatePromptPending[client])
         {
             g_bRatePromptPending[client] = false;
             g_fRatePromptRequestedAt[client] = 0.0;
+        }
+        if (reqType == Req_SubmitReview)
+        {
+            g_bSubmitInFlight[client] = false;
         }
 
         char detail[256] = "";
         ExtractErrorDetail(body, detail, sizeof(detail));
         if (detail[0] != '\0')
         {
-            GOKZ_PrintToChat(client, true, "{red}%s", detail);
+            GOKZ_PrintToChat(client, false, "%s{red}%s", GOKZTOP_PREFIX, detail);
         }
         else
         {
-            // If we got HTML, this is almost always wrong gokztop_base_url (or double /api/v1).
+            // If we got HTML, this is almost always wrong gokz_top_base_url (or double /api/v1).
             if (body[0] != '\0' && !GOKZTop_LooksLikeJson(body))
             {
                 char msg[256];
                 FormatEx(msg, sizeof(msg), "%T", "GOKZTop_NonJsonResponse", client, status);
-                GOKZ_PrintToChat(client, true, "%s", msg);
-                LogMessage("[gokztop] Non-JSON response (status %d). Body starts with: %.64s", status, body);
+                GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
+                LogMessage("[gokz-top] Non-JSON response (status %d). Body starts with: %.64s", status, body);
             }
             else
             {
                 char msg[256];
                 FormatEx(msg, sizeof(msg), "%T", "GOKZTop_HttpErrorGeneric", client, status);
-                GOKZ_PrintToChat(client, true, "%s", msg);
+                GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
             }
         }
         return;
     }
 
+    // Success: map summary has no client, everything else needs a live client
+    if (reqType != Req_MapReviewsSummary && (!client || !IsValidClient(client)))
+    {
+        return;
+    }
+
     switch (reqType)
     {
-        case Req_AggregatedRatings:
+        case Req_MapReviewsSummary:
         {
+            g_bSummaryFetchInFlight = false;
             if (!GOKZTop_LooksLikeJson(body))
             {
-                LogMessage("[gokztop] Expected JSON for aggregated ratings, got: %.64s", body);
-                g_bAggregatedRatingsFetched[client] = true;
-                TryShowMenuWhenReady(client);
-                return;
-            }
-            Handle json = json_load(body);
-            if (json == INVALID_HANDLE || !json_is_array(json))
-            {
-                if (json != INVALID_HANDLE) delete json;
-                g_bAggregatedRatingsFetched[client] = true;
-                TryShowMenuWhenReady(client);
+                LogMessage("[gokz-top] Expected JSON for reviews summary, got: %.64s", body);
                 return;
             }
 
-            float ratings[3];
-            int counts[3];
-            for (int i = 0; i < 3; i++) { ratings[i] = -1.0; counts[i] = 0; }
-
-            int n = json_array_size(json);
-            for (int i = 0; i < n; i++)
+            Handle root = json_load(body);
+            if (root == INVALID_HANDLE || !json_is_object(root))
             {
-                Handle row = json_array_get(json, i);
-                if (row == INVALID_HANDLE || !json_is_object(row)) continue;
+                if (root != INVALID_HANDLE) delete root;
+                return;
+            }
 
-                char aspect[16];
-                if (!json_object_get_string(row, "aspect", aspect, sizeof(aspect))) continue;
-                float rating = json_object_get_float(row, "rating");
-                int count = json_object_get_int(row, "rating_count");
-
-                int idx = ParseAspect(aspect);
-                if (idx >= 0 && idx <= 2)
+            Handle data = json_object_get(root, "data");
+            if (data == INVALID_HANDLE || !json_is_array(data) || json_array_size(data) <= 0)
+            {
+                // No reviews yet for this map
+                delete root;
+                g_bSummaryFetched = true;
+                g_iMapCommentCount = 0;
+                for (int a = 0; a < 3; a++)
                 {
-                    ratings[idx] = rating;
-                    counts[idx] = count;
+                    g_fAvgRating[a] = -1.0;
+                    g_iAvgCount[a] = 0;
                 }
+                return;
             }
 
-            delete json;
+            Handle row = json_array_get(data, 0);
+            if (row == INVALID_HANDLE || !json_is_object(row))
+            {
+                delete root;
+                return;
+            }
+
+            Handle stars = json_object_get(row, "stars");
+            if (stars != INVALID_HANDLE && json_is_object(stars))
+            {
+                g_fAvgRating[Aspect_Overall] = json_object_get_float(stars, "overall_avg_stars");
+                g_iAvgCount[Aspect_Overall] = json_object_get_int(stars, "overall_count");
+                g_fAvgRating[Aspect_Gameplay] = json_object_get_float(stars, "gameplay_avg_stars");
+                g_iAvgCount[Aspect_Gameplay] = json_object_get_int(stars, "gameplay_count");
+                g_fAvgRating[Aspect_Visuals] = json_object_get_float(stars, "visuals_avg_stars");
+                g_iAvgCount[Aspect_Visuals] = json_object_get_int(stars, "visuals_count");
+            }
+            g_iMapCommentCount = json_object_get_int(row, "comment_count");
 
             char mapName[PLATFORM_MAX_PATH];
             GetCurrentMapDisplayName(mapName, sizeof(mapName));
-
-            // Cache for menu display (only if still on same map)
             strcopy(g_sCachedMapName, sizeof(g_sCachedMapName), mapName);
-            for (int a = 0; a < 3; a++)
-            {
-                g_fAvgRating[a] = ratings[a];
-                g_iAvgCount[a] = counts[a];
-            }
+            g_bSummaryFetched = true;
 
-            // Mark aggregated ratings as fetched
-            g_bAggregatedRatingsFetched[client] = true;
-            TryShowMenuWhenReady(client);
-
-            // Only print ratings in chat if NOT fetching for menu (i.e., when player spawns)
-            if (!g_bMenuPending[client])
-            {
-                // Print three lines, one for each aspect, in order: overall, gameplay, visuals
-                char header[128];
-                Format(header, sizeof(header), "{lime}%s{default} ratings:", mapName);
-                GOKZ_PrintToChat(client, true, "%s", header);
-                
-                bool bAny = false;
-                // Order: overall (1), gameplay (2), visuals (0)
-                int order[3] = {Aspect_Overall, Aspect_Gameplay, Aspect_Visuals};
-                for (int i = 0; i < 3; i++)
-                {
-                    int idx = order[i];
-                    if (counts[idx] <= 0 || ratings[idx] < 0.0) continue;
-                    bAny = true;
-                    char stars[16];
-                    BuildStarsFloat(ratings[idx], stars, sizeof(stars));
-                    char line[256];
-                    Format(line, sizeof(line), "  {gold}%s{default} %.2f %s ({gold}%d{default})", g_AspectNames[idx], ratings[idx], stars, counts[idx]);
-                    GOKZ_PrintToChat(client, true, "%s", line);
-                }
-                if (!bAny)
-                {
-                    char msg[256];
-                    FormatEx(msg, sizeof(msg), "%T", "GOKZTop_NoRatingsYet", client, mapName);
-                    GOKZ_PrintToChat(client, true, "%s", msg);
-                }
-            }
+            delete root;
         }
 
-        case Req_MyRatings:
+        case Req_MyReview:
         {
             if (!GOKZTop_LooksLikeJson(body))
             {
-                g_bMyRatingsFetched[client] = true;
+                g_bMyReviewFetched[client] = true;
                 TryShowMenuWhenReady(client);
                 return;
             }
 
-            Handle json = json_load(body);
-            if (json == INVALID_HANDLE || !json_is_array(json))
+            Handle root = json_load(body);
+            if (root == INVALID_HANDLE || !json_is_object(root))
             {
-                if (json != INVALID_HANDLE) delete json;
-                g_bMyRatingsFetched[client] = true;
+                if (root != INVALID_HANDLE) delete root;
+                g_bMyReviewFetched[client] = true;
                 TryShowMenuWhenReady(client);
                 return;
             }
 
-            // Reset then fill.
+            Handle data = json_object_get(root, "data");
+            // Reset then fill (0 / empty means unset)
             g_iMyRating[client][Aspect_Overall] = 0;
             g_iMyRating[client][Aspect_Gameplay] = 0;
             g_iMyRating[client][Aspect_Visuals] = 0;
+            g_sMyComment[client][0] = '\0';
 
-            int n = json_array_size(json);
-            for (int i = 0; i < n; i++)
+            if (data != INVALID_HANDLE && json_is_array(data) && json_array_size(data) > 0)
             {
-                Handle row = json_array_get(json, i);
-                if (row == INVALID_HANDLE || !json_is_object(row)) continue;
-
-                char aspect[16];
-                if (!json_object_get_string(row, "aspect", aspect, sizeof(aspect))) continue;
-                int idx = ParseAspect(aspect);
-                if (idx < 0 || idx > 2) continue;
-
-                int rating = json_object_get_int(row, "rating");
-                if (rating >= 1 && rating <= 5)
+                Handle row = json_array_get(data, 0);
+                if (row != INVALID_HANDLE && json_is_object(row))
                 {
-                    g_iMyRating[client][idx] = rating;
+                    Handle content = json_object_get(row, "content");
+                    if (content != INVALID_HANDLE && json_is_object(content))
+                    {
+                        g_iMyRating[client][Aspect_Overall] = JsonGetOptionalInt(content, "overall");
+                        g_iMyRating[client][Aspect_Gameplay] = JsonGetOptionalInt(content, "gameplay");
+                        g_iMyRating[client][Aspect_Visuals] = JsonGetOptionalInt(content, "visuals");
+                        JsonGetOptionalString(content, "comment", g_sMyComment[client], sizeof(g_sMyComment[]));
+                    }
                 }
             }
 
-            delete json;
+            delete root;
 
-            // Mark my ratings as fetched
-            g_bMyRatingsFetched[client] = true;
+            // Mark my review as fetched
+            g_bMyReviewFetched[client] = true;
             TryShowMenuWhenReady(client);
 
             // If we were waiting to decide whether to prompt, do it now.
@@ -1047,17 +1111,18 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
                 // Don't let an old pending request prompt much later (e.g. reconnect delays).
                 if (GetGameTime() - g_fRatePromptRequestedAt[client] <= 30.0)
                 {
-                    bool hasAnyRating =
+                    bool hasAny =
                         (g_iMyRating[client][Aspect_Overall] > 0
                         || g_iMyRating[client][Aspect_Gameplay] > 0
-                        || g_iMyRating[client][Aspect_Visuals] > 0);
+                        || g_iMyRating[client][Aspect_Visuals] > 0
+                        || g_sMyComment[client][0] != '\0');
 
-                    if (!hasAnyRating)
+                    if (!hasAny)
                     {
                         g_bRateReminderSent[client] = true;
                         char msg[256];
                         FormatEx(msg, sizeof(msg), "%T", "GOKZTop_RatePrompt", client);
-                        GOKZ_PrintToChat(client, true, "%s", msg);
+                        GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
                     }
                 }
                 g_bRatePromptPending[client] = false;
@@ -1065,62 +1130,67 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
             }
         }
 
-        case Req_SubmitRating:
+        case Req_SubmitReview:
         {
-            // Decode packed aspect/rating from data2.
-            int aspect = (data2 >> 8) & 0xFF;
-            int rating = (data2 >> 16) & 0xFF;
-            if (aspect >= 0 && aspect <= 2 && rating >= 1 && rating <= 5)
-            {
-                g_iMyRating[client][aspect] = rating;
-            }
-            char msg[128];
-            FormatEx(msg, sizeof(msg), "%T", "GOKZTop_RatingSaved", client);
-            GOKZ_PrintToChat(client, true, "%s", msg);
-        }
+            g_bSubmitInFlight[client] = false;
 
-        case Req_SubmitComment:
-        {
-            char msg[128];
-            FormatEx(msg, sizeof(msg), "%T", "GOKZTop_CommentSaved", client);
-            GOKZ_PrintToChat(client, true, "%s", msg);
-        }
+            const int FLAG_OVERALL = (1 << 0);
+            const int FLAG_GAMEPLAY = (1 << 1);
+            const int FLAG_VISUALS = (1 << 2);
+            const int FLAG_COMMENT = (1 << 3);
 
-        case Req_FetchCommentsCount:
-        {
-            if (!GOKZTop_LooksLikeJson(body))
+            if (reqFlags & FLAG_OVERALL)
             {
-                g_bCommentsCountFetched[client] = true;
-                g_iCommentsCount[client] = 0;
-                TryShowMenuWhenReady(client);
-                return;
+                g_iMyRating[client][Aspect_Overall] = g_iDraftRating[client][Aspect_Overall];
+                g_bDraftDirtyRating[client][Aspect_Overall] = false;
             }
-            
-            Handle root = json_load(body);
-            if (root == INVALID_HANDLE || !json_is_object(root))
+            if (reqFlags & FLAG_GAMEPLAY)
             {
-                if (root != INVALID_HANDLE) delete root;
-                g_bCommentsCountFetched[client] = true;
-                g_iCommentsCount[client] = 0;
-                TryShowMenuWhenReady(client);
-                return;
+                g_iMyRating[client][Aspect_Gameplay] = g_iDraftRating[client][Aspect_Gameplay];
+                g_bDraftDirtyRating[client][Aspect_Gameplay] = false;
+            }
+            if (reqFlags & FLAG_VISUALS)
+            {
+                g_iMyRating[client][Aspect_Visuals] = g_iDraftRating[client][Aspect_Visuals];
+                g_bDraftDirtyRating[client][Aspect_Visuals] = false;
+            }
+            if (reqFlags & FLAG_COMMENT)
+            {
+                strcopy(g_sMyComment[client], sizeof(g_sMyComment[]), g_sDraftComment[client]);
+                g_bDraftDirtyComment[client] = false;
             }
 
-            // Parse new format: { "data": [...], "count": 2 }
-            int count = json_object_get_int(root, "count");
-            g_iCommentsCount[client] = count;
-            g_bCommentsCountFetched[client] = true;
-            
-            delete root;
-            TryShowMenuWhenReady(client);
+            if ((reqFlags & (FLAG_OVERALL | FLAG_GAMEPLAY | FLAG_VISUALS)) != 0)
+            {
+                char msg[128];
+                FormatEx(msg, sizeof(msg), "%T", "GOKZTop_RatingSaved", client);
+                GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
+            }
+            if (reqFlags & FLAG_COMMENT)
+            {
+                char msg[128];
+                FormatEx(msg, sizeof(msg), "%T", "GOKZTop_CommentSaved", client);
+                GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
+            }
+
+            // Refresh map summary counts/avgs after review updates.
+            if (!g_bSummaryFetchInFlight) FetchMapReviewsSummary();
+
+            if (g_bReopenMenuAfterSubmit[client])
+            {
+                g_bReopenMenuAfterSubmit[client] = false;
+                g_bMenuPending[client] = true;
+                g_bMyReviewFetched[client] = false;
+                FetchMyReview(client, true);
+            }
         }
 
         case Req_FetchComments:
         {
             if (!GOKZTop_LooksLikeJson(body))
             {
-                GOKZ_PrintToChat(client, true, "{red}Comments response was not JSON. Check {gold}gokztop_base_url{red}.");
-                LogMessage("[gokztop] Expected JSON for comments, got: %.64s", body);
+                GOKZ_PrintToChat(client, false, "%s{red}Comments response was not JSON. Check {gold}gokz_top_base_url{red}.", GOKZTOP_PREFIX);
+                LogMessage("[gokz-top] Expected JSON for comments, got: %.64s", body);
                 return;
             }
             ShowCommentsMenuFromJson(client, body);
@@ -1132,14 +1202,15 @@ static void TryShowMenuWhenReady(int client)
 {
     if (!g_bMenuPending[client]) return;
     
-    // Wait for aggregated ratings, my ratings, and comments count to be fetched
-    if (!g_bAggregatedRatingsFetched[client] || !g_bMyRatingsFetched[client] || !g_bCommentsCountFetched[client])
+    // Wait for player review to be fetched (summary is best-effort)
+    if (!g_bMyReviewFetched[client])
     {
         return;
     }
     
     // All data fetched, show menu
     g_bMenuPending[client] = false;
+    InitDraftFromMyReview(client);
     ShowRateMenu_Main(client);
 }
 
@@ -1147,14 +1218,14 @@ static void ShowCommentsMenuFromJson(int client, const char[] body)
 {
     if (!GOKZTop_LooksLikeJson(body))
     {
-        GOKZ_PrintToChat(client, true, "{red}Comments response was not JSON. Check {gold}gokztop_base_url{red}.");
+        GOKZ_PrintToChat(client, false, "%s{red}Comments response was not JSON. Check {gold}gokz_top_base_url{red}.", GOKZTOP_PREFIX);
         return;
     }
     Handle root = json_load(body);
     if (root == INVALID_HANDLE || !json_is_object(root))
     {
         if (root != INVALID_HANDLE) delete root;
-        GOKZ_PrintToChat(client, true, "{red}Failed to parse comments response");
+        GOKZ_PrintToChat(client, false, "%s{red}Failed to parse comments response", GOKZTOP_PREFIX);
         return;
     }
 
@@ -1163,7 +1234,7 @@ static void ShowCommentsMenuFromJson(int client, const char[] body)
     if (data == INVALID_HANDLE || !json_is_array(data))
     {
         delete root;
-        GOKZ_PrintToChat(client, true, "{red}No comments found");
+        GOKZ_PrintToChat(client, false, "%s{red}No comments found", GOKZTOP_PREFIX);
         return;
     }
 
@@ -1200,27 +1271,13 @@ static void ShowCommentsMenuFromJson(int client, const char[] body)
             json_object_get_string(row, "steamid64", name, sizeof(name));
         }
 
-        char comment[128] = "";
-        json_object_get_string(row, "comment", comment, sizeof(comment));
-
         int overall = 0;
-        Handle ratings = json_object_get(row, "ratings");
-        if (ratings != INVALID_HANDLE && json_is_array(ratings))
+        char comment[128] = "";
+        Handle content = json_object_get(row, "content");
+        if (content != INVALID_HANDLE && json_is_object(content))
         {
-            int rn = json_array_size(ratings);
-            for (int r = 0; r < rn; r++)
-            {
-                Handle rr = json_array_get(ratings, r);
-                if (rr == INVALID_HANDLE || !json_is_object(rr)) continue;
-
-                char aspect[16];
-                if (!json_object_get_string(rr, "aspect", aspect, sizeof(aspect))) continue;
-                if (StrEqual(aspect, "overall", false))
-                {
-                    overall = json_object_get_int(rr, "rating");
-                    break;
-                }
-            }
+            overall = JsonGetOptionalInt(content, "overall");
+            JsonGetOptionalString(content, "comment", comment, sizeof(comment));
         }
 
         char stars[16];
@@ -1332,7 +1389,7 @@ static void BuildAspectLine(int client, int aspect, const char[] label, char[] o
     int r = 0;
     if (client > 0 && client <= MaxClients && aspect >= 0 && aspect <= 2)
     {
-        r = g_iMyRating[client][aspect];
+        r = g_iDraftRating[client][aspect];
     }
 
     char stars[16];
@@ -1387,5 +1444,25 @@ static void ExtractErrorDetail(const char[] body, char[] out, int maxlen)
 
     json_object_get_string(root, "detail", out, maxlen);
     delete root;
+    TrimString(out);
+}
+
+static int JsonGetOptionalInt(Handle obj, const char[] key)
+{
+    if (obj == INVALID_HANDLE) return 0;
+    Handle v = json_object_get(obj, key);
+    if (v == INVALID_HANDLE || json_is_null(v)) return 0;
+    int n = json_object_get_int(obj, key);
+    if (n >= 1 && n <= 5) return n;
+    return 0;
+}
+
+static void JsonGetOptionalString(Handle obj, const char[] key, char[] out, int maxlen)
+{
+    out[0] = '\0';
+    if (obj == INVALID_HANDLE) return;
+    Handle v = json_object_get(obj, key);
+    if (v == INVALID_HANDLE || json_is_null(v)) return;
+    json_object_get_string(obj, key, out, maxlen);
     TrimString(out);
 }

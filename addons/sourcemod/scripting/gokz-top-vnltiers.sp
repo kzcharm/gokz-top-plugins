@@ -10,7 +10,7 @@
 #include <SteamWorks>
 #include <smjansson>
 
-#include <gokztop>
+#include <gokz-top>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -29,6 +29,9 @@ enum
 };
 
 static bool g_bVNLTierFetched[MAXPLAYERS + 1];
+
+// Global reusable prefix
+static const char GOKZTOP_PREFIX[] = "{gold}GOKZ.TOP {grey}| ";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -128,7 +131,7 @@ static void FetchVNLTier(int client)
 {
     if (!GOKZTop_IsConfigured())
     {
-        GOKZ_PrintToChat(client, true, "{red}GOKZTop API not configured (gokztop-core missing?)");
+        GOKZ_PrintToChat(client, false, "%s{red}GOKZTop API not configured (gokz-top-core missing?)", GOKZTOP_PREFIX);
         return;
     }
 
@@ -144,14 +147,14 @@ static void FetchVNLTier(int client)
     char url[768];
     if (!GOKZTop_BuildApiUrl(url, sizeof(url), path))
     {
-        GOKZ_PrintToChat(client, true, "{red}GOKZTop base URL not configured (gokztop-core missing?)");
+        GOKZ_PrintToChat(client, false, "%s{red}GOKZTop base URL not configured (gokz-top-core missing?)", GOKZTOP_PREFIX);
         return;
     }
 
     Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, false, 15);
     if (req == INVALID_HANDLE)
     {
-        GOKZ_PrintToChat(client, true, "{red}Failed to create HTTP request");
+        GOKZ_PrintToChat(client, false, "%s{red}Failed to create HTTP request", GOKZTOP_PREFIX);
         return;
     }
 
@@ -185,7 +188,7 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
     {
         if (status == 404)
         {
-            GOKZ_PrintToChat(client, true, "{yellow}VNL tier information not available for this map");
+            GOKZ_PrintToChat(client, false, "%s{yellow}VNL tier information not available for this map", GOKZTOP_PREFIX);
         }
         else
         {
@@ -202,11 +205,11 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
             
             if (detail[0] != '\0')
             {
-                GOKZ_PrintToChat(client, true, "{red}%s", detail);
+                GOKZ_PrintToChat(client, false, "%s{red}%s", GOKZTOP_PREFIX, detail);
             }
             else
             {
-                GOKZ_PrintToChat(client, true, "{red}Failed to fetch VNL tier information (HTTP %d)", status);
+                GOKZ_PrintToChat(client, false, "%s{red}Failed to fetch VNL tier information (HTTP %d)", GOKZTOP_PREFIX, status);
             }
         }
         return;
@@ -216,8 +219,8 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
     {
         if (!GOKZTop_LooksLikeJson(body))
         {
-            GOKZ_PrintToChat(client, true, "{red}Invalid response from server");
-            LogMessage("[gokztop-vnltiers] Expected JSON, got: %.64s", body);
+            GOKZ_PrintToChat(client, false, "%s{red}Invalid response from server", GOKZTOP_PREFIX);
+            LogMessage("[gokz-top-vnltiers] Expected JSON, got: %.64s", body);
             return;
         }
 
@@ -225,7 +228,7 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
         if (json == INVALID_HANDLE || !json_is_object(json))
         {
             if (json != INVALID_HANDLE) delete json;
-            GOKZ_PrintToChat(client, true, "{red}Invalid JSON response");
+            GOKZ_PrintToChat(client, false, "%s{red}Invalid JSON response", GOKZTOP_PREFIX);
             return;
         }
 
@@ -245,13 +248,13 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
         GetTierColor(pro_tier, pro_color, sizeof(pro_color));
 
         // Display tier information
-        GOKZ_PrintToChat(client, true, "{lime}%s{grey} VNL Tiers:  {yellow}TP: {%s}T%d{default}  {blue}PRO: {%s}T%d{default}", mapName, tp_color, tp_tier, pro_color, pro_tier);
+        GOKZ_PrintToChat(client, false, "%s{lime}%s{grey} VNL Tiers:  {yellow}TP: {%s}T%d{default}  {blue}PRO: {%s}T%d{default}", GOKZTOP_PREFIX, mapName, tp_color, tp_tier, pro_color, pro_tier);
         
         if (notes[0] != '\0')
         {
             // Notes may contain escaped quotes, so we need to handle that
             // The JSON decoder should handle this automatically
-            GOKZ_PrintToChat(client, true, "  {gold}Notes:{bluegrey} %s", notes);
+            GOKZ_PrintToChat(client, false, "%s  {gold}Notes:{bluegrey} %s", GOKZTOP_PREFIX, notes);
         }
     }
 }

@@ -49,6 +49,13 @@
 		"chi"		"{yellow}请在聊天中输入评论（或 {gold}!cancel{yellow}）。"
 	}
 
+	"GOKZTop_CommentCancelHint"
+	{
+		"en"		"{yellow}Tip: Type {gold}!{yellow} to cancel. Commands starting with {gold}!/.{yellow} or {gold}rtv{yellow} are ignored."
+		"ru"		"{yellow}Подсказка: Введите {gold}!{yellow} для отмены. Команды, начинающиеся с {gold}!/.{yellow} или {gold}rtv{yellow}, игнорируются."
+		"chi"		"{yellow}提示：输入 {gold}!{yellow} 可取消。以 {gold}!/.{yellow} 或 {gold}rtv{yellow} 开头的命令将被忽略。"
+	}
+
 	"GOKZTop_Menu_RateComment"
 	{
 		"en"		"Write/Update Comment"
@@ -61,6 +68,13 @@
 		"en"		"View Comments"
 		"ru"		"Просмотреть комментарии"
 		"chi"		"查看评论"
+	}
+
+	"GOKZTop_Menu_SubmitReview"
+	{
+		"en"		"Submit Review"
+		"ru"		"Отправить отзыв"
+		"chi"		"提交评价"
 	}
 
 	"GOKZTop_Menu_LabelOverall"
@@ -153,9 +167,9 @@
 	"GOKZTop_NonJsonResponse"
 	{
 		"#format"	"{1:d}"
-		"en"		"{red}HTTP error ({1}). Non-JSON response. Check {gold}gokztop_base_url{red}."
-		"ru"		"{red}HTTP ошибка ({1}). Ответ не JSON. Проверьте {gold}gokztop_base_url{red}."
-		"chi"		"{red}HTTP 错误（{1}）。返回不是 JSON。请检查 {gold}gokztop_base_url{red}。"
+		"en"		"{red}HTTP error ({1}). Non-JSON response. Check {gold}gokz_top_base_url{red}."
+		"ru"		"{red}HTTP ошибка ({1}). Ответ не JSON. Проверьте {gold}gokz_top_base_url{red}."
+		"chi"		"{red}HTTP 错误（{1}）。返回不是 JSON。请检查 {gold}gokz_top_base_url{red}。"
 	}
 
 	"GOKZTop_HttpErrorGeneric"
@@ -175,9 +189,9 @@
 
 	"GOKZTop_MissingApiKey"
 	{
-		"en"		"{red}Server gokz.top API key not configured (cfg/sourcemod/gokztop/apikey.cfg)"
-		"ru"		"{red}API ключ gokz.top не настроен (cfg/sourcemod/gokztop/apikey.cfg)"
-		"chi"		"{red}服务器未配置 gokz.top API 密钥（cfg/sourcemod/gokztop/apikey.cfg）"
+		"en"		"{red}Server gokz.top API key not configured (cfg/sourcemod/gokz-top/apikey.cfg)"
+		"ru"		"{red}API ключ gokz.top не настроен (cfg/sourcemod/gokz-top/apikey.cfg)"
+		"chi"		"{red}服务器未配置 gokz.top API 密钥（cfg/sourcemod/gokz-top/apikey.cfg）"
 	}
 
 	"GOKZTop_SteamIdNotReady"

@@ -396,6 +396,38 @@ native float GOKZTop_GetRating(int client, int mode);
 native int GOKZTop_GetRank(int client, int mode);
 
 /**
+ * Get player's regional rank for a specific mode.
+ * Requires gokz-top-core plugin.
+ * 
+ * @param client    Client index
+ * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @return          Regional rank value (0 if not available or not loaded)
+ */
+native int GOKZTop_GetRegionalRank(int client, int mode);
+
+/**
+ * Check if player has regional rank data for a specific mode.
+ * Requires gokz-top-core plugin.
+ * 
+ * @param client    Client index
+ * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @return          True if regional rank is available, false otherwise
+ */
+native bool GOKZTop_HasRegionalRank(int client, int mode);
+
+/**
+ * Get player's region code for a specific mode.
+ * Requires gokz-top-core plugin.
+ * 
+ * @param client    Client index
+ * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @param buffer    Output buffer for region code
+ * @param maxlen    Maximum length of buffer
+ * @return          Number of bytes written
+ */
+native int GOKZTop_GetRegionCode(int client, int mode, char[] buffer, int maxlen);
+
+/**
  * Check if leaderboard data is loaded for a player and mode.
  * Requires gokz-top-core plugin.
  * 
@@ -418,11 +450,14 @@ native bool GOKZTop_RefreshLeaderboardData(int client, int mode);
 /**
  * Forward called when leaderboard data is fetched for a player.
  * 
- * @param client    Client index
- * @param mode      GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
- * @param rating    Player's rating
- * @param rank      Player's rank (0 if not ranked)
+ * @param client        Client index
+ * @param mode          GOKZ mode (0=VNL, 1=SKZ, 2=KZT)
+ * @param rating        Player's rating
+ * @param rank          Player's rank (0 if not ranked)
+ * @param regionalRank  Player's regional rank (0 if not available)
+ * @param hasRegionalRank True if regional rank is available
+ * @param regionCode    Region code (e.g., "EU", "NA", empty if not available)
  */
-forward void GOKZTop_OnLeaderboardDataFetched(int client, int mode, float rating, int rank);
+forward void GOKZTop_OnLeaderboardDataFetched(int client, int mode, float rating, int rank, int regionalRank, bool hasRegionalRank, const char[] regionCode);
 
 

@@ -9,6 +9,7 @@
 #undef REQUIRE_EXTENSIONS
 #undef REQUIRE_PLUGIN
 #include <gokz/chat>
+#include <gokz-top>
 
 #pragma newdecls required
 #pragma semicolon 1
@@ -27,6 +28,12 @@ public Plugin myinfo =
 int gI_Rank[MAXPLAYERS + 1][MODE_COUNT];
 bool gB_Localranks;
 bool gB_Chat;
+bool gB_GokzTop;
+
+// Extended tag types (assuming ProfileTagType enum: Rank=0, VIP=1, Admin=2)
+#define ProfileTagType_GlobalRank 3
+#define ProfileTagType_RegionalRank 4
+#define ProfileTagType_Rating 5
 
 #include "gokz-profile/options.sp"
 #include "gokz-profile/profile.sp"
@@ -54,6 +61,7 @@ public void OnAllPluginsLoaded()
 {
 	gB_Localranks = LibraryExists("gokz-localranks");
 	gB_Chat = LibraryExists("gokz-chat");
+	gB_GokzTop = LibraryExists("gokz-top-core");
 
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -74,12 +82,14 @@ public void OnLibraryAdded(const char[] name)
 {
 	gB_Localranks = gB_Localranks || StrEqual(name, "gokz-localranks");
 	gB_Chat = gB_Chat || StrEqual(name, "gokz-chat");
+	gB_GokzTop = gB_GokzTop || StrEqual(name, "gokz-top-core");
 }
 
 public void OnLibraryRemoved(const char[] name)
 {
 	gB_Localranks = gB_Localranks && !StrEqual(name, "gokz-localranks");
 	gB_Chat = gB_Chat && !StrEqual(name, "gokz-chat");
+	gB_GokzTop = gB_GokzTop && !StrEqual(name, "gokz-top-core");
 }
 
 
@@ -164,6 +174,19 @@ public void GOKZ_GL_OnPointsUpdated(int client, int mode)
 	Profile_OnPointsUpdated(client, mode);
 }
 
+public void GOKZTop_OnLeaderboardDataFetched(int client, int mode, float rating, int rank, int regionalRank, bool hasRegionalRank, const char[] regionCode)
+{
+	// Update tags when leaderboard data is fetched
+	if (IsValidClient(client) && !IsFakeClient(client))
+	{
+		int currentMode = GOKZ_GetCoreOption(client, Option_Mode);
+		if (mode == currentMode)
+		{
+			UpdateRank(client, mode);
+		}
+	}
+}
+
 public void UpdateRank(int client, int mode)
 {
 	if (!IsValidClient(client) || IsFakeClient(client))
@@ -183,11 +206,151 @@ public void UpdateRank(int client, int mode)
 			FormatEx(chatTag, sizeof(chatTag), "%T", "Tag - Admin", client);
 			color = TAG_COLOR_ADMIN;
 		}
-		if (tagType == ProfileTagType_VIP)
+		else if (tagType == ProfileTagType_VIP)
 		{
 			FormatEx(clanTag, sizeof(clanTag), "[%s %T]", gC_ModeNamesShort[mode], "Tag - VIP", client);
 			FormatEx(chatTag, sizeof(chatTag), "%T", "Tag - VIP", client);
 			color = TAG_COLOR_VIP;
+		}
+		else if (tagType == ProfileTagType_GlobalRank && gB_GokzTop)
+		{
+			// Check if player is in leaderboards
+			if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
+			{
+				int rank = GOKZTop_GetRank(client, mode);
+				if (rank > 0)
+				{
+					FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
+					FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
+					color = "{lightblue}";
+				}
+				else
+				{
+					// Not in leaderboards, fall back to mode only
+					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+					FormatEx(chatTag, sizeof(chatTag), "");
+					color = "{default}";
+				}
+			}
+			else
+			{
+				// Data not loaded yet, show mode only
+				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+				FormatEx(chatTag, sizeof(chatTag), "");
+				color = "{default}";
+			}
+		}
+		else if (tagType == ProfileTagType_RegionalRank && gB_GokzTop)
+		{
+			// Check if player is in leaderboards and has regional rank
+			if (GOKZTop_IsLeaderboardDataLoaded(client, mode) && GOKZTop_HasRegionalRank(client, mode))
+			{
+				int regionalRank = GOKZTop_GetRegionalRank(client, mode);
+				if (regionalRank > 0)
+				{
+					char regionCode[8];
+					GOKZTop_GetRegionCode(client, mode, regionCode, sizeof(regionCode));
+					
+					// Format with region code (e.g., "EU#149" or "NA#123")
+					if (regionCode[0] != '\0')
+					{
+						FormatEx(clanTag, sizeof(clanTag), "[%s %s#%d]", gC_ModeNamesShort[mode], regionCode, regionalRank);
+						FormatEx(chatTag, sizeof(chatTag), "%s#%d", regionCode, regionalRank);
+					}
+					else
+					{
+						// Fallback if region code not available
+						FormatEx(clanTag, sizeof(clanTag), "[%s REG#%d]", gC_ModeNamesShort[mode], regionalRank);
+						FormatEx(chatTag, sizeof(chatTag), "REG#%d", regionalRank);
+					}
+					color = "{lightgreen}";
+				}
+				else
+				{
+					// Regional rank is 0, fall back to global rank if available
+					if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
+					{
+						int rank = GOKZTop_GetRank(client, mode);
+						if (rank > 0)
+						{
+							FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
+							FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
+							color = "{lightblue}";
+						}
+						else
+						{
+							// Not in leaderboards, fall back to mode only
+							FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+							FormatEx(chatTag, sizeof(chatTag), "");
+							color = "{default}";
+						}
+					}
+					else
+					{
+						// Data not loaded, show mode only
+						FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+						FormatEx(chatTag, sizeof(chatTag), "");
+						color = "{default}";
+					}
+				}
+			}
+			else
+			{
+				// Data not loaded or no regional rank, fall back to global rank if available
+				if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
+				{
+					int rank = GOKZTop_GetRank(client, mode);
+					if (rank > 0)
+					{
+						FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
+						FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
+						color = "{lightblue}";
+					}
+					else
+					{
+						// Not in leaderboards, show mode only
+						FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+						FormatEx(chatTag, sizeof(chatTag), "");
+						color = "{default}";
+					}
+				}
+				else
+				{
+					// Data not loaded, show mode only
+					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+					FormatEx(chatTag, sizeof(chatTag), "");
+					color = "{default}";
+				}
+			}
+		}
+		else if (tagType == ProfileTagType_Rating && gB_GokzTop)
+		{
+			// Check if player is in leaderboards
+			if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
+			{
+				float rating = GOKZTop_GetRating(client, mode);
+				if (rating > 0.0)
+				{
+					int floorRating = RoundToFloor(rating);
+					FormatEx(clanTag, sizeof(clanTag), "[%s Lv.%d]", gC_ModeNamesShort[mode], floorRating);
+					FormatEx(chatTag, sizeof(chatTag), "Lv.%d", floorRating);
+					color = "{yellow}";
+				}
+				else
+				{
+					// Not in leaderboards, fall back to mode only
+					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+					FormatEx(chatTag, sizeof(chatTag), "");
+					color = "{default}";
+				}
+			}
+			else
+			{
+				// Data not loaded yet, show mode only
+				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+				FormatEx(chatTag, sizeof(chatTag), "");
+				color = "{default}";
+			}
 		}
 
 		if (GOKZ_GetOption(client, gC_ProfileOptionNames[ProfileOption_ShowRankClanTag]) != ProfileOptionBool_Enabled)
@@ -276,6 +439,45 @@ bool CanUseTagType(int client, int tagType)
 		case ProfileTagType_Rank: return true;
 		case ProfileTagType_VIP: return CheckCommandAccess(client, "gokz_flag_vip", ADMFLAG_CUSTOM1);
 		case ProfileTagType_Admin: return CheckCommandAccess(client, "gokz_flag_admin", ADMFLAG_GENERIC);
+		case ProfileTagType_GlobalRank, ProfileTagType_Rating:
+		{
+			// Only allow if gokz-top-core is loaded and player is in leaderboards
+			if (!gB_GokzTop)
+			{
+				return false;
+			}
+			int mode = GOKZ_GetCoreOption(client, Option_Mode);
+			if (!GOKZTop_IsLeaderboardDataLoaded(client, mode))
+			{
+				return false;
+			}
+			// Check if player has a valid rank/rating
+			if (tagType == ProfileTagType_Rating)
+			{
+				float rating = GOKZTop_GetRating(client, mode);
+				return rating > 0.0;
+			}
+			else // ProfileTagType_GlobalRank
+			{
+				int rank = GOKZTop_GetRank(client, mode);
+				return rank > 0;
+			}
+		}
+		case ProfileTagType_RegionalRank:
+		{
+			// Only allow if gokz-top-core is loaded and player has regional rank
+			if (!gB_GokzTop)
+			{
+				return false;
+			}
+			int mode = GOKZ_GetCoreOption(client, Option_Mode);
+			if (!GOKZTop_IsLeaderboardDataLoaded(client, mode))
+			{
+				return false;
+			}
+			// Check if player has regional rank available
+			return GOKZTop_HasRegionalRank(client, mode) && GOKZTop_GetRegionalRank(client, mode) > 0;
+		}
 		default: return false;
 	}
 }

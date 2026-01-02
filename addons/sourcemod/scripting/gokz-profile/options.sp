@@ -10,8 +10,16 @@ void RegisterOptions()
 {
 	for (ProfileOption option; option < PROFILEOPTION_COUNT; option++)
 	{
+		int maxValue = gI_ProfileOptionCounts[option] - 1;
+		
+		// Extend max value for TagType option if gokz-top-core is available
+		if (option == ProfileOption_TagType && LibraryExists("gokz-top-core"))
+		{
+			maxValue = ProfileTagType_Rating; // Highest extended tag type
+		}
+		
 		GOKZ_RegisterOption(gC_ProfileOptionNames[option], gC_ProfileOptionDescriptions[option], 
-			OptionType_Int, gI_ProfileOptionDefaults[option], 0, gI_ProfileOptionCounts[option] - 1);
+			OptionType_Int, gI_ProfileOptionDefaults[option], 0, maxValue);
 	}
 }
 
@@ -95,9 +103,35 @@ public void TopMenuHandler_Profile(TopMenu topmenu, TopMenuAction action, TopMen
 	{
 		if (option == ProfileOption_TagType)
 		{
-			FormatEx(buffer, maxlength, "%T - %T",
+			int tagType = GOKZ_GetOption(param, gC_ProfileOptionNames[option]);
+			char tagTypeName[64];
+			
+			// Handle extended tag types
+			if (tagType == ProfileTagType_GlobalRank)
+			{
+				FormatEx(tagTypeName, sizeof(tagTypeName), "Global Rank");
+			}
+			else if (tagType == ProfileTagType_RegionalRank)
+			{
+				FormatEx(tagTypeName, sizeof(tagTypeName), "Regional Rank");
+			}
+			else if (tagType == ProfileTagType_Rating)
+			{
+				FormatEx(tagTypeName, sizeof(tagTypeName), "Rating");
+			}
+			else if (tagType < PROFILETAGTYPE_COUNT)
+			{
+				// Use translation for standard tag types
+				FormatEx(tagTypeName, sizeof(tagTypeName), "%T", gC_ProfileTagTypePhrases[tagType], param);
+			}
+			else
+			{
+				FormatEx(tagTypeName, sizeof(tagTypeName), "Unknown");
+			}
+			
+			FormatEx(buffer, maxlength, "%T - %s",
 					gC_ProfileOptionPhrases[option], param,
-					gC_ProfileTagTypePhrases[GOKZ_GetOption(param, gC_ProfileOptionNames[option])], param);
+					tagTypeName);
 		}
 		else
 		{
@@ -108,21 +142,61 @@ public void TopMenuHandler_Profile(TopMenu topmenu, TopMenuAction action, TopMen
 	}
 	else if (action == TopMenuAction_SelectOption)
 	{
-		GOKZ_CycleOption(param, gC_ProfileOptionNames[option]);
-
 		if (option == ProfileOption_TagType)
 		{
-			for (int i = 0; i < PROFILETAGTYPE_COUNT; i++)
+			int currentTagType = GOKZ_GetOption(param, gC_ProfileOptionNames[option]);
+			int maxTagType = PROFILETAGTYPE_COUNT - 1;
+			
+			// Extend max to include new tag types if gokz-top-core is available
+			if (LibraryExists("gokz-top-core"))
 			{
-				int tagType = GOKZ_GetOption(param, gC_ProfileOptionNames[option]);
-				if (!CanUseTagType(param, tagType))
+				maxTagType = ProfileTagType_Rating; // Highest extended tag type
+			}
+			
+			// Find next usable tag type starting from current + 1
+			int nextTagType = currentTagType;
+			int startTagType = currentTagType;
+			int attempts = 0;
+			int maxAttempts = maxTagType + 1;
+			
+			// Cycle through all possible tag types
+			do
+			{
+				nextTagType++;
+				if (nextTagType > maxTagType)
 				{
-					GOKZ_CycleOption(param, gC_ProfileOptionNames[option]);
+					nextTagType = 0; // Wrap around to Rank
+				}
+				attempts++;
+				
+				// Check if this tag type is usable
+				if (CanUseTagType(param, nextTagType))
+				{
+					break;
+				}
+				
+				// Safety: if we've cycled back to start or exceeded max attempts, default to Rank
+				if (nextTagType == startTagType || attempts >= maxAttempts)
+				{
+					nextTagType = ProfileTagType_Rank; // Rank is always usable
+					break;
 				}
 			}
+			while (true);
+			
+			// Set the tag type
+			char optionName[64];
+			strcopy(optionName, sizeof(optionName), gC_ProfileOptionNames[option]);
+			GOKZ_SetOption(param, optionName, nextTagType);
+		}
+		else
+		{
+			GOKZ_CycleOption(param, gC_ProfileOptionNames[option]);
 		}
 
 		gTM_Options.Display(param, TopMenuPosition_LastCategory);
 	}
 }
+
+
 

@@ -44,6 +44,9 @@ enum struct LeaderboardData
 {
     float fRating;
     int iRank;
+    int iRegionalRank;
+    bool bHasRegionalRank;
+    char szRegionCode[8];
     bool bLoaded;
     int iLastRetryTime;
 }
@@ -142,6 +145,9 @@ public void OnClientPutInServer(int client)
     {
         g_LeaderboardData[client][mode].fRating = 0.0;
         g_LeaderboardData[client][mode].iRank = 0;
+        g_LeaderboardData[client][mode].iRegionalRank = 0;
+        g_LeaderboardData[client][mode].bHasRegionalRank = false;
+        g_LeaderboardData[client][mode].szRegionCode[0] = '\0';
         g_LeaderboardData[client][mode].bLoaded = false;
         g_LeaderboardData[client][mode].iLastRetryTime = 0;
     }
@@ -262,12 +268,15 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
     {
         g_LeaderboardData[client][mode].fRating = 0.0;
         g_LeaderboardData[client][mode].iRank = 0;
+        g_LeaderboardData[client][mode].iRegionalRank = 0;
+        g_LeaderboardData[client][mode].bHasRegionalRank = false;
+        g_LeaderboardData[client][mode].szRegionCode[0] = '\0';
         g_LeaderboardData[client][mode].bLoaded = true;
         if (hRequest != INVALID_HANDLE)
         {
             delete hRequest;
         }
-        Call_OnLeaderboardDataFetched(client, mode, 0.0, 0);
+        Call_OnLeaderboardDataFetched(client, mode, 0.0, 0, 0, false, "");
         return;
     }
 
@@ -310,15 +319,44 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
     // Parse response
     float rating = json_object_get_float(json, "rating");
     int rank = json_object_get_int(json, "rank");
+    
+    // Parse regional rank and region code if available
+    int regionalRank = 0;
+    bool hasRegionalRank = false;
+    char regionCode[8] = "";
+    Handle regionalRankObj = json_object_get(json, "regional_rank");
+    if (regionalRankObj != INVALID_HANDLE)
+    {
+        if (!json_is_null(regionalRankObj) && json_is_number(regionalRankObj))
+        {
+            regionalRank = json_integer_value(regionalRankObj);
+            hasRegionalRank = (regionalRank > 0);
+        }
+        delete regionalRankObj;
+    }
+    
+    // Parse region code
+    Handle regionCodeObj = json_object_get(json, "region_code");
+    if (regionCodeObj != INVALID_HANDLE)
+    {
+        if (!json_is_null(regionCodeObj) && json_is_string(regionCodeObj))
+        {
+            json_string_value(regionCodeObj, regionCode, sizeof(regionCode));
+        }
+        delete regionCodeObj;
+    }
 
     g_LeaderboardData[client][mode].fRating = rating;
     g_LeaderboardData[client][mode].iRank = rank;
+    g_LeaderboardData[client][mode].iRegionalRank = regionalRank;
+    g_LeaderboardData[client][mode].bHasRegionalRank = hasRegionalRank;
+    strcopy(g_LeaderboardData[client][mode].szRegionCode, 8, regionCode);
     g_LeaderboardData[client][mode].bLoaded = true;
 
     delete json;
 
     // Call forward to notify other plugins
-    Call_OnLeaderboardDataFetched(client, mode, rating, rank);
+    Call_OnLeaderboardDataFetched(client, mode, rating, rank, regionalRank, hasRegionalRank, regionCode);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -328,16 +366,19 @@ static GlobalForward H_OnLeaderboardDataFetched;
 
 static void CreateForwards()
 {
-    H_OnLeaderboardDataFetched = new GlobalForward("GOKZTop_OnLeaderboardDataFetched", ET_Ignore, Param_Cell, Param_Cell, Param_Float, Param_Cell);
+    H_OnLeaderboardDataFetched = new GlobalForward("GOKZTop_OnLeaderboardDataFetched", ET_Ignore, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_Cell, Param_Cell, Param_String);
 }
 
-static void Call_OnLeaderboardDataFetched(int client, int mode, float rating, int rank)
+static void Call_OnLeaderboardDataFetched(int client, int mode, float rating, int rank, int regionalRank, bool hasRegionalRank, const char[] regionCode)
 {
     Call_StartForward(H_OnLeaderboardDataFetched);
     Call_PushCell(client);
     Call_PushCell(mode);
     Call_PushFloat(rating);
     Call_PushCell(rank);
+    Call_PushCell(regionalRank);
+    Call_PushCell(hasRegionalRank);
+    Call_PushString(regionCode);
     Call_Finish();
 }
 
@@ -348,6 +389,9 @@ static void CreateNatives()
 {
     CreateNative("GOKZTop_GetRating", Native_GetRating);
     CreateNative("GOKZTop_GetRank", Native_GetRank);
+    CreateNative("GOKZTop_GetRegionalRank", Native_GetRegionalRank);
+    CreateNative("GOKZTop_HasRegionalRank", Native_HasRegionalRank);
+    CreateNative("GOKZTop_GetRegionCode", Native_GetRegionCode);
     CreateNative("GOKZTop_IsLeaderboardDataLoaded", Native_IsLeaderboardDataLoaded);
     CreateNative("GOKZTop_RefreshLeaderboardData", Native_RefreshLeaderboardData);
 }
@@ -372,6 +416,44 @@ public int Native_GetRank(Handle plugin, int numParams)
         return 0;
 
     return g_LeaderboardData[client][mode].iRank;
+}
+
+public int Native_GetRegionalRank(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    int mode = GetNativeCell(2);
+
+    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+        return 0;
+
+    return g_LeaderboardData[client][mode].iRegionalRank;
+}
+
+public int Native_HasRegionalRank(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    int mode = GetNativeCell(2);
+
+    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+        return false;
+
+    return g_LeaderboardData[client][mode].bHasRegionalRank;
+}
+
+public int Native_GetRegionCode(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    int mode = GetNativeCell(2);
+    int maxlen = GetNativeCell(4);
+
+    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+    {
+        SetNativeString(3, "", maxlen);
+        return 0;
+    }
+
+    SetNativeString(3, g_LeaderboardData[client][mode].szRegionCode, maxlen);
+    return 0;
 }
 
 public int Native_IsLeaderboardDataLoaded(Handle plugin, int numParams)

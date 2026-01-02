@@ -35,6 +35,21 @@ bool gB_GokzTop;
 #define ProfileTagType_RegionalRank 4
 #define ProfileTagType_Rating 5
 
+// Rank colors based on level (rating floor)
+stock char gC_gokzTopRankColor[11][] = {
+	"{grey}",        // 0 - Unranked/Not loaded
+	"{default}",     // 1 - Level 1
+	"{blue}",        // 2 - Level 2
+	"{lightgreen}",  // 3 - Level 3
+	"{green}",       // 4 - Level 4
+	"{purple}",      // 5 - Level 5
+	"{orchid}",      // 6 - Level 6
+	"{lightred}",    // 7 - Level 7
+	"{lightred}",    // 8 - Level 8
+	"{red}",         // 9 - Level 9
+	"{gold}"         // 10 - Level 10
+};
+
 #include "gokz-profile/options.sp"
 #include "gokz-profile/profile.sp"
 
@@ -220,9 +235,10 @@ public void UpdateRank(int client, int mode)
 				int rank = GOKZTop_GetRank(client, mode);
 				if (rank > 0)
 				{
+					float rating = GOKZTop_GetRating(client, mode);
 					FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
 					FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
-					color = "{lightblue}";
+					GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 				}
 				else
 				{
@@ -248,6 +264,7 @@ public void UpdateRank(int client, int mode)
 				int regionalRank = GOKZTop_GetRegionalRank(client, mode);
 				if (regionalRank > 0)
 				{
+					float rating = GOKZTop_GetRating(client, mode);
 					char regionCode[8];
 					GOKZTop_GetRegionCode(client, mode, regionCode, sizeof(regionCode));
 					
@@ -263,7 +280,7 @@ public void UpdateRank(int client, int mode)
 						FormatEx(clanTag, sizeof(clanTag), "[%s REG#%d]", gC_ModeNamesShort[mode], regionalRank);
 						FormatEx(chatTag, sizeof(chatTag), "REG#%d", regionalRank);
 					}
-					color = "{lightgreen}";
+					GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 				}
 				else
 				{
@@ -273,9 +290,10 @@ public void UpdateRank(int client, int mode)
 						int rank = GOKZTop_GetRank(client, mode);
 						if (rank > 0)
 						{
+							float rating = GOKZTop_GetRating(client, mode);
 							FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
 							FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
-							color = "{lightblue}";
+							GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 						}
 						else
 						{
@@ -302,9 +320,10 @@ public void UpdateRank(int client, int mode)
 					int rank = GOKZTop_GetRank(client, mode);
 					if (rank > 0)
 					{
+						float rating = GOKZTop_GetRating(client, mode);
 						FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
 						FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
-						color = "{lightblue}";
+						GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 					}
 					else
 					{
@@ -334,7 +353,7 @@ public void UpdateRank(int client, int mode)
 					int floorRating = RoundToFloor(rating);
 					FormatEx(clanTag, sizeof(clanTag), "[%s Lv.%d]", gC_ModeNamesShort[mode], floorRating);
 					FormatEx(chatTag, sizeof(chatTag), "Lv.%d", floorRating);
-					color = "{yellow}";
+					GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 				}
 				else
 				{
@@ -430,6 +449,18 @@ void UpdateTags(int client, int rank, int mode)
 			GOKZ_CH_SetChatTag(client, "", "{default}");
 		}
 	}
+}
+
+// Get rank color based on rating/level
+void GetGokzTopRankColorFromRating(float rating, char[] color, int maxlen)
+{
+	int level = RoundToFloor(rating);
+	if (level < 1)
+		strcopy(color, maxlen, gC_gokzTopRankColor[0]); // Grey for unranked
+	else if (level > 10)
+		strcopy(color, maxlen, gC_gokzTopRankColor[10]); // Gold for level 10+
+	else
+		strcopy(color, maxlen, gC_gokzTopRankColor[level]);
 }
 
 bool CanUseTagType(int client, int tagType)

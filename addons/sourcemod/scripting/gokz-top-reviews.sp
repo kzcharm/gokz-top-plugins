@@ -916,7 +916,7 @@ static void FetchComments(int client)
     Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, false, 15);
     if (req == INVALID_HANDLE)
     {
-                GOKZ_PrintToChat(client, false, "%s{red}Failed to create HTTP request", GOKZTOP_PREFIX);
+        GOKZ_PrintToChat(client, false, "%s{red}Failed to create HTTP request", GOKZTOP_PREFIX);
         return;
     }
 

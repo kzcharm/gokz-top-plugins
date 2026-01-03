@@ -1,0 +1,93 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get latest release version
+        id: get_version
+        run: |
+          # Get the latest release tag using GitHub API, or use v0.1.0 if none exists
+          API_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest" || echo "")
+          
+          if [ -z "$API_RESPONSE" ] || echo "$API_RESPONSE" | grep -q '"message": "Not Found"'; then
+            # No releases exist, start with v0.1.0
+            NEW_VERSION="v0.1.0"
+          else
+            # Extract tag_name from JSON response
+            LATEST_TAG=$(echo "$API_RESPONSE" | grep -o '"tag_name": "[^"]*' | cut -d'"' -f4)
+            
+            # Extract version numbers (remove 'v' prefix)
+            VERSION=${LATEST_TAG#v}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+            
+            # Increment patch version
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Created version: $NEW_VERSION"
+
+      - name: Create full package zip
+        id: create_full_package
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          ZIP_NAME="gokz-top-plugins-${VERSION}.zip"
+          
+          # Create zip with folder structure preserved
+          # Include: addons/sourcemod/plugins, addons/sourcemod/translations, cfg, materials
+          # Exclude: addons/sourcemod/scripting
+          cd ${{ github.workspace }}
+          zip -r "${ZIP_NAME}" \
+            addons/sourcemod/plugins \
+            addons/sourcemod/translations \
+            cfg \
+            materials \
+            -x "addons/sourcemod/scripting/*" "addons/sourcemod/scripting/**/*" "*.DS_Store"
+          
+          echo "zip_name=${ZIP_NAME}" >> $GITHUB_OUTPUT
+          echo "Created full package: ${ZIP_NAME}"
+
+      - name: Create upgrade package zip
+        id: create_upgrade_package
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          ZIP_NAME="gokz-top-plugins-${VERSION}-upgrade.zip"
+          
+          # Create zip with only plugins, preserving folder structure
+          cd ${{ github.workspace }}
+          zip -r "${ZIP_NAME}" \
+            addons/sourcemod/plugins \
+            -x "*.DS_Store"
+          
+          echo "zip_name=${ZIP_NAME}" >> $GITHUB_OUTPUT
+          echo "Created upgrade package: ${ZIP_NAME}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          files: |
+            ${{ steps.create_full_package.outputs.zip_name }}
+            ${{ steps.create_upgrade_package.outputs.zip_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

@@ -158,9 +158,10 @@ public void TopMenuHandler_Profile(TopMenu topmenu, TopMenuAction action, TopMen
 			int startTagType = currentTagType;
 			int attempts = 0;
 			int maxAttempts = maxTagType + 1;
+			bool foundTagType = false;
 			
 			// Cycle through all possible tag types
-			do
+			while (!foundTagType && attempts < maxAttempts)
 			{
 				nextTagType++;
 				if (nextTagType > maxTagType)
@@ -172,17 +173,21 @@ public void TopMenuHandler_Profile(TopMenu topmenu, TopMenuAction action, TopMen
 				// Check if this tag type is usable
 				if (CanUseTagType(param, nextTagType))
 				{
-					break;
+					foundTagType = true;
 				}
-				
-				// Safety: if we've cycled back to start or exceeded max attempts, default to Rank
-				if (nextTagType == startTagType || attempts >= maxAttempts)
+				// Safety: if we've cycled back to start, default to Rank
+				else if (nextTagType == startTagType)
 				{
 					nextTagType = ProfileTagType_Rank; // Rank is always usable
-					break;
+					foundTagType = true;
 				}
 			}
-			while (true);
+			
+			// Fallback: if we exhausted all attempts, default to Rank
+			if (!foundTagType)
+			{
+				nextTagType = ProfileTagType_Rank; // Rank is always usable
+			}
 			
 			// Set the tag type
 			char optionName[64];

@@ -36,7 +36,6 @@ public Plugin myinfo =
 #define MODE_COUNT 3
 #define RETRY_INTERVAL 15
 
-static ConVar gCvarBaseUrl;
 static ConVar gCvarApiKey;
 
 // Leaderboard data per player per mode
@@ -53,6 +52,14 @@ enum struct LeaderboardData
 
 LeaderboardData g_LeaderboardData[MAXPLAYERS + 1][MODE_COUNT];
 bool g_bUsesGokz = false;
+
+// Menu system
+int g_iMenuMode[MAXPLAYERS + 1]; // Current mode being viewed in menu
+bool g_bMenuDataPending[MAXPLAYERS + 1]; // Whether menu data fetch is pending
+
+// GOKZ Options Menu integration
+TopMenu gTM_Options;
+TopMenuObject gTMO_KZTop;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
@@ -73,7 +80,7 @@ public void OnPluginStart()
     AutoExecConfig_SetCreateFile(true);
     AutoExecConfig_SetCreateDirectory(true);
 
-    gCvarBaseUrl = AutoExecConfig_CreateConVar(
+    AutoExecConfig_CreateConVar(
         "gokz_top_base_url",
         "https://api.gokz.top",
         "Base URL for GOKZTop API (no trailing slash recommended)",
@@ -106,6 +113,10 @@ public void OnPluginStart()
 
     // Gentle hint if missing
     CreateTimer(3.0, Timer_AnnounceIfMissing, _, TIMER_FLAG_NO_MAPCHANGE);
+
+    // Register commands
+    RegConsoleCmd("sm_kztop", Command_KZTop);
+    RegConsoleCmd("sm_gokztop", Command_KZTop);
 }
 
 public void OnAllPluginsLoaded()
@@ -123,6 +134,16 @@ public void OnAllPluginsLoaded()
             FetchLeaderboardData(client, mode);
         }
     }
+
+    // Set up GOKZ options menu integration
+    if (g_bUsesGokz)
+    {
+        TopMenu topMenu = GOKZ_GetOptionsTopMenu();
+        if (topMenu != null)
+        {
+            GOKZ_OnOptionsMenuReady(topMenu);
+        }
+    }
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -133,6 +154,61 @@ public void OnLibraryAdded(const char[] name)
 public void OnLibraryRemoved(const char[] name)
 {
     g_bUsesGokz = g_bUsesGokz && !StrEqual(name, "gokz-core");
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GOKZ Options Menu Integration
+// ──────────────────────────────────────────────────────────────────────────────
+public void GOKZ_OnOptionsMenuCreated(TopMenu topMenu)
+{
+    if (gTM_Options == topMenu && gTMO_KZTop != INVALID_TOPMENUOBJECT)
+    {
+        return;
+    }
+
+    gTMO_KZTop = topMenu.AddCategory("kztop", TopMenuHandler_KZTop);
+}
+
+public void GOKZ_OnOptionsMenuReady(TopMenu topMenu)
+{
+    if (gTMO_KZTop == INVALID_TOPMENUOBJECT)
+    {
+        GOKZ_OnOptionsMenuCreated(topMenu);
+    }
+
+    if (gTM_Options == topMenu)
+    {
+        return;
+    }
+
+    gTM_Options = topMenu;
+    gTM_Options.AddItem("kztop_menu", TopMenuHandler_KZTopMenu, gTMO_KZTop);
+}
+
+public void TopMenuHandler_KZTop(TopMenu topmenu, TopMenuAction action, TopMenuObject topobj_id, int param, char[] buffer, int maxlength)
+{
+    if (action == TopMenuAction_DisplayOption)
+    {
+        Format(buffer, maxlength, "GOKZ.TOP");
+    }
+
+    if (action == TopMenuAction_DisplayTitle)
+    {
+        Format(buffer, maxlength, "GOKZ.TOP (!gokztop)");
+    }
+}
+
+public void TopMenuHandler_KZTopMenu(TopMenu topmenu, TopMenuAction action, TopMenuObject topobj_id, int param, char[] buffer, int maxlength)
+{
+    if (action == TopMenuAction_DisplayOption)
+    {
+        Format(buffer, maxlength, "Open GOKZ.TOP Menu");
+    }
+
+    if (action == TopMenuAction_SelectOption)
+    {
+        FakeClientCommand(param, "sm_kztop");
+    }
 }
 
 public void OnClientPutInServer(int client)
@@ -151,6 +227,10 @@ public void OnClientPutInServer(int client)
         g_LeaderboardData[client][mode].bLoaded = false;
         g_LeaderboardData[client][mode].iLastRetryTime = 0;
     }
+
+    // Reset menu state
+    g_iMenuMode[client] = -1;
+    g_bMenuDataPending[client] = false;
 
     // Fetch for current mode
     int mode = g_bUsesGokz ? GOKZ_GetCoreOption(client, Option_Mode) : 2;
@@ -503,6 +583,315 @@ void Hook_OnThinkPost(int ent)
         {
             FetchLeaderboardData(client, mode);
         }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Menu Commands
+// ──────────────────────────────────────────────────────────────────────────────
+public Action Command_KZTop(int client, int args)
+{
+    if (client <= 0 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client))
+        return Plugin_Handled;
+
+    char steamid64[32];
+    if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), true))
+    {
+        PrintToChat(client, " \x01[\x04GOKZ.TOP\x01] Unable to get your SteamID64.");
+        return Plugin_Handled;
+    }
+
+    // Always default to current player mode first
+    g_iMenuMode[client] = g_bUsesGokz ? GOKZ_GetCoreOption(client, Option_Mode) : 2;
+    if (g_iMenuMode[client] < 0 || g_iMenuMode[client] >= MODE_COUNT)
+        g_iMenuMode[client] = 2;
+
+    FetchMenuData(client, steamid64, g_iMenuMode[client]);
+    return Plugin_Handled;
+}
+
+static void FetchMenuData(int client, const char[] steamid64, int mode)
+{
+    if (client <= 0 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client))
+        return;
+
+    if (mode < 0 || mode >= MODE_COUNT)
+        return;
+
+    char modeStr[8];
+    if (!GOKZTop_GetModeString(mode, modeStr, sizeof(modeStr)))
+        return;
+
+    char path[128];
+    Format(path, sizeof(path), "/leaderboards/%s", steamid64);
+
+    char query[32];
+    Format(query, sizeof(query), "mode=%s", modeStr);
+
+    char url[1024];
+    if (!GOKZTop_BuildApiUrl(url, sizeof(url), path, query))
+    {
+        PrintToChat(client, " \x01[\x04GOKZ.TOP\x01] Failed to build API URL.");
+        return;
+    }
+
+    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodGET, url, false, 15);
+    if (req == INVALID_HANDLE)
+    {
+        PrintToChat(client, " \x01[\x04GOKZ.TOP\x01] Failed to create HTTP request.");
+        return;
+    }
+
+    // Store context: lower 16 bits = userid, upper 16 bits = mode, bit 31 = menu flag
+    int userid = GetClientUserId(client);
+    int contextValue = userid | (mode << 16) | (1 << 31); // Bit 31 indicates menu request
+    SteamWorks_SetHTTPRequestContextValue(req, contextValue, 0);
+    SteamWorks_SetHTTPCallbacks(req, OnMenuHTTPCompleted);
+    SteamWorks_SendHTTPRequest(req);
+
+    g_bMenuDataPending[client] = true;
+}
+
+public void OnMenuHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any data1, any data2)
+{
+    int contextValue = data1;
+    bool isMenuRequest = (contextValue & (1 << 31)) != 0;
+    
+    if (!isMenuRequest)
+        return; // Not a menu request, ignore
+
+    int userID = contextValue & 0xFFFF;
+    int mode = (contextValue >> 16) & 0x7FFF; // Mask out menu flag bit
+    int client = GetClientOfUserId(userID);
+
+    if (!client || client <= 0 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client))
+    {
+        if (hRequest != INVALID_HANDLE)
+        {
+            delete hRequest;
+        }
+        return;
+    }
+
+    if (mode < 0 || mode >= MODE_COUNT)
+    {
+        if (hRequest != INVALID_HANDLE)
+        {
+            delete hRequest;
+        }
+        g_bMenuDataPending[client] = false;
+        return;
+    }
+
+    int status = view_as<int>(eStatusCode);
+    g_bMenuDataPending[client] = false;
+
+    if (bFailure || !bRequestSuccessful || status < 200 || status >= 300)
+    {
+        if (status == 404)
+        {
+            PrintToChat(client, " \x01[\x04GOKZ.TOP\x01] Player not found in leaderboards.");
+        }
+        else
+        {
+            PrintToChat(client, " \x01[\x04GOKZ.TOP\x01] Failed to fetch data (HTTP %d).", status);
+        }
+        if (hRequest != INVALID_HANDLE)
+        {
+            delete hRequest;
+        }
+        return;
+    }
+
+    char body[4096];
+    if (!GOKZTop_ReadResponseBody(hRequest, body, sizeof(body)))
+    {
+        if (hRequest != INVALID_HANDLE)
+        {
+            delete hRequest;
+        }
+        PrintToChat(client, " \x01[\x04GOKZ.TOP\x01] Failed to read response body.");
+        return;
+    }
+
+    if (hRequest != INVALID_HANDLE)
+    {
+        delete hRequest;
+    }
+
+    if (!GOKZTop_LooksLikeJson(body))
+    {
+        PrintToChat(client, " \x01[\x04GOKZ.TOP\x01] Invalid response format.");
+        return;
+    }
+
+    Handle json = json_load(body);
+    if (json == INVALID_HANDLE || !json_is_object(json))
+    {
+        if (json != INVALID_HANDLE)
+            delete json;
+        PrintToChat(client, " \x01[\x04GOKZ.TOP\x01] Failed to parse JSON response.");
+        return;
+    }
+
+    // Parse all the data we need
+    float rating = json_object_get_float(json, "rating");
+    float ratingEasy = json_object_get_float(json, "maps_easy_rating");
+    float ratingHard = json_object_get_float(json, "maps_hard_rating");
+    int rank = json_object_get_int(json, "rank");
+    int regionalRank = json_object_get_int(json, "regional_rank");
+    int totalPointsV2 = json_object_get_int(json, "total_points_v2");
+    
+    char regionCode[8] = "";
+    Handle regionCodeObj = json_object_get(json, "region_code");
+    if (regionCodeObj != INVALID_HANDLE)
+    {
+        if (!json_is_null(regionCodeObj) && json_is_string(regionCodeObj))
+        {
+            json_string_value(regionCodeObj, regionCode, sizeof(regionCode));
+        }
+        delete regionCodeObj;
+    }
+
+    delete json;
+
+    // Show the menu
+    ShowKZTopMenu(client, mode, rating, ratingEasy, ratingHard, rank, regionalRank, regionCode, totalPointsV2);
+}
+
+static void ShowKZTopMenu(int client, int mode, float rating, float ratingEasy, float ratingHard, int rank, int regionalRank, const char[] regionCode, int totalPointsV2)
+{
+    Menu menu = new Menu(MenuHandler_KZTop);
+    
+    char modeStr[8];
+    GOKZTop_GetModeString(mode, modeStr, sizeof(modeStr));
+    
+    // Format rating values
+    char ratingStr[32], ratingEasyStr[32], ratingHardStr[32];
+    Format(ratingStr, sizeof(ratingStr), "%.3f", rating);
+    Format(ratingEasyStr, sizeof(ratingEasyStr), "%.3f", ratingEasy);
+    Format(ratingHardStr, sizeof(ratingHardStr), "%.3f", ratingHard);
+
+    // Build title with rating, global rank, and regional rank on separate lines
+    char title[256];
+    Format(title, sizeof(title), "GOKZ.TOP - %s Mode\nRating: %s\nGlobal Rank: #%d", 
+           modeStr, ratingStr, rank > 0 ? rank : 0);
+    
+    // Add regional rank to title if available
+    if (regionalRank > 0 && strlen(regionCode) > 0)
+    {
+        char titleWithRegion[256];
+        Format(titleWithRegion, sizeof(titleWithRegion), "%s\n%s Rank: #%d", 
+               title, regionCode, regionalRank);
+        menu.SetTitle(titleWithRegion);
+    }
+    else
+    {
+        menu.SetTitle(title);
+    }
+
+    // Format points with commas
+    char pointsStr[32];
+    FormatNumberWithCommas(totalPointsV2, pointsStr, sizeof(pointsStr));
+
+    // Add menu items
+    char display[128];
+    
+    // Show Rating.E and Rating.H directly
+    Format(display, sizeof(display), "Rating.E: %s", ratingEasyStr);
+    menu.AddItem("", display, ITEMDRAW_DISABLED);
+    
+    Format(display, sizeof(display), "Rating.H: %s", ratingHardStr);
+    menu.AddItem("", display, ITEMDRAW_DISABLED);
+    
+    Format(display, sizeof(display), "V2 Points: %s", pointsStr);
+    menu.AddItem("", display, ITEMDRAW_DISABLED);
+    
+    // Add separator
+    menu.AddItem("", "", ITEMDRAW_SPACER);
+    
+    // Add mode switcher (now on first page)
+    char nextModeStr[8];
+    int nextMode = (mode + 1) % MODE_COUNT;
+    GOKZTop_GetModeString(nextMode, nextModeStr, sizeof(nextModeStr));
+    Format(display, sizeof(display), "Switch to %s Mode", nextModeStr);
+    menu.AddItem("switch_mode", display);
+
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_KZTop(Menu menu, MenuAction action, int param1, int param2)
+{
+    if (action == MenuAction_End)
+    {
+        delete menu;
+        return 0;
+    }
+
+    if (action == MenuAction_Select)
+    {
+        char info[32];
+        menu.GetItem(param2, info, sizeof(info));
+
+        if (StrEqual(info, "switch_mode"))
+        {
+            // Cycle to next mode
+            g_iMenuMode[param1] = (g_iMenuMode[param1] + 1) % MODE_COUNT;
+            
+            char steamid64[32];
+            if (GetClientAuthId(param1, AuthId_SteamID64, steamid64, sizeof(steamid64), true))
+            {
+                FetchMenuData(param1, steamid64, g_iMenuMode[param1]);
+            }
+        }
+    }
+
+    return 0;
+}
+
+static void FormatNumberWithCommas(int value, char[] buffer, int maxlen)
+{
+    char temp[32];
+    IntToString(value, temp, sizeof(temp));
+    
+    int len = strlen(temp);
+    int pos = 0;
+    int digitCount = 0;
+    
+    // Build reversed string with commas
+    for (int i = len - 1; i >= 0; i--)
+    {
+        // Insert comma every 3 digits (but not before the first digit)
+        if (digitCount > 0 && digitCount % 3 == 0)
+        {
+            if (pos < maxlen - 1)
+            {
+                buffer[pos++] = ',';
+            }
+        }
+        if (pos < maxlen - 1)
+        {
+            buffer[pos++] = temp[i];
+            digitCount++;
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    buffer[pos] = '\0';
+    
+    // Reverse the string
+    int start = 0;
+    int end = pos - 1;
+    while (start < end)
+    {
+        char swap = buffer[start];
+        buffer[start] = buffer[end];
+        buffer[end] = swap;
+        start++;
+        end--;
     }
 }
 

@@ -29,11 +29,15 @@ int gI_Rank[MAXPLAYERS + 1][MODE_COUNT];
 bool gB_Localranks;
 bool gB_Chat;
 bool gB_GokzTop;
+char gC_OriginalSteamGroupTag[MAXPLAYERS + 1][32];
 
 // Extended tag types (assuming ProfileTagType enum: Rank=0, VIP=1, Admin=2)
 #define ProfileTagType_GlobalRank 3
 #define ProfileTagType_RegionalRank 4
 #define ProfileTagType_Rating 5
+#define ProfileTagType_SteamGroup 6
+
+#define MAX_STEAM_GROUP_TAG_LENGTH 9
 
 // Rank colors based on level (rating floor)
 stock char gC_gokzTopRankColor[11][] = {
@@ -53,7 +57,20 @@ stock char gC_gokzTopRankColor[11][] = {
 #include "gokz-profile/options.sp"
 #include "gokz-profile/profile.sp"
 
+// Helper function to check if a mode is globally tracked
+bool IsModeGloballed(int mode)
+{
+	// Only the original 3 modes are globally tracked
+	return (mode == Mode_Vanilla || mode == Mode_SimpleKZ || mode == Mode_KZTimer);
+}
 
+void TruncateSteamGroupTag(char[] tag)
+{
+	if (strlen(tag) > MAX_STEAM_GROUP_TAG_LENGTH)
+	{
+		tag[MAX_STEAM_GROUP_TAG_LENGTH] = '\0';
+	}
+}
 
 // =====[ PLUGIN EVENTS ]=====
 
@@ -117,6 +134,26 @@ public Action OnClientCommandKeyValues(int client, KeyValues kv)
 	char cmd[16];
 	if (kv.GetSectionName(cmd, sizeof(cmd)) && StrEqual(cmd, "ClanTagChanged", false))
 	{
+		// Capture the original Steam group tag from the first event before blocking
+		if (strlen(gC_OriginalSteamGroupTag[client]) == 0)
+		{
+			char tag[32];
+			// Try different ways to get the tag from KeyValues
+			if (kv.GetString("tag", tag, sizeof(tag)) && strlen(tag) > 0)
+			{
+				TruncateSteamGroupTag(tag);
+				strcopy(gC_OriginalSteamGroupTag[client], sizeof(gC_OriginalSteamGroupTag[]), tag);
+			}
+			else if (kv.GotoFirstSubKey())
+			{
+				if (kv.GetString(NULL_STRING, tag, sizeof(tag)) && strlen(tag) > 0)
+				{
+					TruncateSteamGroupTag(tag);
+					strcopy(gC_OriginalSteamGroupTag[client], sizeof(gC_OriginalSteamGroupTag[]), tag);
+				}
+				kv.GoBack();
+			}
+		}
 		return Plugin_Handled;
 	}
 	return Plugin_Continue;
@@ -160,7 +197,43 @@ public void OnClientConnected(int client)
 	{
 		gI_Rank[client][mode] = 0;
 	}
+	gC_OriginalSteamGroupTag[client][0] = '\0';
 	Profile_OnClientConnected(client);
+}
+
+public void OnClientAuthorized(int client, const char[] auth)
+{
+	// Steam group tag will be captured from ClanTagChanged event
+}
+
+public void OnClientPutInServer(int client)
+{
+	// Try to get Steam group tag early with a small delay to catch it before plugin modifies it
+	if (IsValidClient(client) && !IsFakeClient(client))
+	{
+		CreateTimer(0.1, Timer_CaptureSteamGroupTag, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+	}
+}
+
+public Action Timer_CaptureSteamGroupTag(Handle timer, int userid)
+{
+	int client = GetClientOfUserId(userid);
+	if (IsValidClient(client) && !IsFakeClient(client))
+	{
+		if (strlen(gC_OriginalSteamGroupTag[client]) == 0)
+		{
+			// Use CS_GetClientClanTag to get the current clan tag
+			char tag[32];
+			CS_GetClientClanTag(client, tag, sizeof(tag));
+			// Only capture if it's not empty and doesn't look like a mode tag (doesn't start with [)
+			if (strlen(tag) > 0 && tag[0] != '[')
+			{
+				TruncateSteamGroupTag(tag);
+				strcopy(gC_OriginalSteamGroupTag[client], sizeof(gC_OriginalSteamGroupTag[]), tag);
+			}
+		}
+	}
+	return Plugin_Stop;
 }
 
 public void OnClientDisconnect(int client)
@@ -371,9 +444,53 @@ public void UpdateRank(int client, int mode)
 				color = "{default}";
 			}
 		}
+		else if (tagType == ProfileTagType_SteamGroup)
+		{
+			// Calculate rank to get the rank color
+			int rank = 0;
+			if (IsModeGloballed(mode))
+			{
+				int points = GOKZ_GL_GetRankPoints(client, mode);
+				if (points != -1)
+				{
+					for (rank = 1; rank < RANK_COUNT; rank++)
+					{
+						if (points < gI_rankThreshold[mode][rank])
+						{
+							break;
+						}
+					}
+					rank--;
+				}
+			}
+			// For non-globalled modes, default to rank 0 ("New")
+			
+			if (strlen(gC_OriginalSteamGroupTag[client]) > 0)
+			{
+				FormatEx(clanTag, sizeof(clanTag), "[%s %s]", gC_ModeNamesShort[mode], gC_OriginalSteamGroupTag[client]);
+				strcopy(chatTag, sizeof(chatTag), gC_OriginalSteamGroupTag[client]);
+				// Use rank color, fallback to default if rank is invalid
+				if (rank >= 0 && rank < RANK_COUNT)
+				{
+					strcopy(color, sizeof(color), gC_rankColor[rank]);
+				}
+				else
+				{
+					color = "{default}";
+				}
+			}
+			else
+			{
+				// Fallback to mode only if no Steam group tag
+				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+				chatTag[0] = '\0';
+				color = "{default}";
+			}
+		}
 
 		if (GOKZ_GetOption(client, gC_ProfileOptionNames[ProfileOption_ShowRankClanTag]) != ProfileOptionBool_Enabled)
 		{
+			// Hide the tag (Admin/VIP/SteamGroup) and show only mode, like Rank does
 			FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
 		}
 		CS_SetClientClanTag(client, clanTag);
@@ -470,6 +587,7 @@ bool CanUseTagType(int client, int tagType)
 		case ProfileTagType_Rank: return true;
 		case ProfileTagType_VIP: return CheckCommandAccess(client, "gokz_flag_vip", ADMFLAG_CUSTOM1);
 		case ProfileTagType_Admin: return CheckCommandAccess(client, "gokz_flag_admin", ADMFLAG_GENERIC);
+		case ProfileTagType_SteamGroup: return true;
 		case ProfileTagType_GlobalRank, ProfileTagType_Rating:
 		{
 			// Only allow if gokz-top-core is loaded and player is in leaderboards

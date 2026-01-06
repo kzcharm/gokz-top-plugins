@@ -12,10 +12,10 @@ void RegisterOptions()
 	{
 		int maxValue = gI_ProfileOptionCounts[option] - 1;
 		
-		// Extend max value for TagType option if gokz-top-core is available
-		if (option == ProfileOption_TagType && LibraryExists("gokz-top-core"))
+		// Extend max value for TagType option
+		if (option == ProfileOption_TagType)
 		{
-			maxValue = ProfileTagType_Rating; // Highest extended tag type
+			maxValue = ProfileTagType_SteamGroup; // Highest extended tag type (always available)
 		}
 		
 		GOKZ_RegisterOption(gC_ProfileOptionNames[option], gC_ProfileOptionDescriptions[option], 
@@ -109,15 +109,19 @@ public void TopMenuHandler_Profile(TopMenu topmenu, TopMenuAction action, TopMen
 			// Handle extended tag types
 			if (tagType == ProfileTagType_GlobalRank)
 			{
-				FormatEx(tagTypeName, sizeof(tagTypeName), "Global Rank");
+				FormatEx(tagTypeName, sizeof(tagTypeName), "%T", "Options Menu - Tag Global Rank", param);
 			}
 			else if (tagType == ProfileTagType_RegionalRank)
 			{
-				FormatEx(tagTypeName, sizeof(tagTypeName), "Regional Rank");
+				FormatEx(tagTypeName, sizeof(tagTypeName), "%T", "Options Menu - Tag Regional Rank", param);
 			}
 			else if (tagType == ProfileTagType_Rating)
 			{
-				FormatEx(tagTypeName, sizeof(tagTypeName), "Rating");
+				FormatEx(tagTypeName, sizeof(tagTypeName), "%T", "Options Menu - Tag Rating", param);
+			}
+			else if (tagType == ProfileTagType_SteamGroup)
+			{
+				FormatEx(tagTypeName, sizeof(tagTypeName), "%T", "Options Menu - Tag Steam Group", param);
 			}
 			else if (tagType < PROFILETAGTYPE_COUNT)
 			{
@@ -145,13 +149,7 @@ public void TopMenuHandler_Profile(TopMenu topmenu, TopMenuAction action, TopMen
 		if (option == ProfileOption_TagType)
 		{
 			int currentTagType = GOKZ_GetOption(param, gC_ProfileOptionNames[option]);
-			int maxTagType = PROFILETAGTYPE_COUNT - 1;
-			
-			// Extend max to include new tag types if gokz-top-core is available
-			if (LibraryExists("gokz-top-core"))
-			{
-				maxTagType = ProfileTagType_Rating; // Highest extended tag type
-			}
+			int maxTagType = ProfileTagType_SteamGroup; // Highest extended tag type (always available)
 			
 			// Find next usable tag type starting from current + 1
 			int nextTagType = currentTagType;

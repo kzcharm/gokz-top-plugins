@@ -80,7 +80,7 @@ public void OnLibraryRemoved(const char[] name)
 public void OnMapStart()
 {
     char path[PLATFORM_MAX_PATH];
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 11; i++)
     {
         Format(path, sizeof(path), "materials/panorama/images/icons/xp/level%i.png", 5001 + i);
         AddFileToDownloadsTable(path);
@@ -181,13 +181,21 @@ public void GOKZTop_OnLeaderboardDataFetched(int client, int mode, float rating,
     if (mode < 0 || mode >= MODE_COUNT)
         return;
 
-    // Convert rating (1-11 range) to level (1-10)
-    // Rating 1.0-2.0 = Level 1, 2.0-3.0 = Level 2, ..., 10.0-11.0 = Level 10
-    int level = RoundToFloor(rating);
-    if (level > 10)
-        level = 10;
-    else if (level < 1)
-        level = 0;
+    // Convert rating (1-11 range) to level (1-11)
+    // Rating 1.0-2.0 = Level 1, 2.0-3.0 = Level 2, ..., 10.0-10.49 = Level 10, 10.5-11.0 = Level 11
+    int level;
+    if (rating >= 10.5)
+    {
+        level = 11;
+    }
+    else
+    {
+        level = RoundToFloor(rating);
+        if (level > 10)
+            level = 10;
+        else if (level < 1)
+            level = 0;
+    }
 
     g_Players[client].iSkillLevel[mode] = level;
 
@@ -220,11 +228,19 @@ static void UpdateSkillLevel(int client)
     if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
     {
         float rating = GOKZTop_GetRating(client, mode);
-        int level = RoundToFloor(rating);
-        if (level > 10)
-            level = 10;
-        else if (level < 1)
-            level = 0;
+        int level;
+        if (rating >= 10.5)
+        {
+            level = 11;
+        }
+        else
+        {
+            level = RoundToFloor(rating);
+            if (level > 10)
+                level = 10;
+            else if (level < 1)
+                level = 0;
+        }
         g_Players[client].iSkillLevel[mode] = level;
     }
     else

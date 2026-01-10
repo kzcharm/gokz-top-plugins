@@ -519,12 +519,8 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
             strcopy(name, sizeof(name), "Unknown");
         }
 
-        // Get SteamID64
-        char steamid64[32];
-        if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
-        {
-            continue; // Skip players without SteamID64
-        }
+        // Get duration first (matches axekz order)
+        float duration = GetClientTime(client);
 
         // Get timer time from GOKZ
         float timerTime = 0.0;
@@ -547,6 +543,9 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
         {
             strcopy(mode, sizeof(mode), "KZT"); // Default
         }
+
+        // Get score
+        int score = CS_GetClientContributionScore(client);
 
         // Get pause status from GOKZ
         bool isPaused = false;
@@ -573,9 +572,12 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
             teleports = GOKZ_GetTeleportCount(client);
         }
 
-        // Get score and duration
-        int score = CS_GetClientContributionScore(client);
-        float duration = GetClientTime(client);
+        // Get SteamID64 last (matches axekz order - call after other functions)
+        char steamid64[32];
+        if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
+        {
+            continue; // Skip players without SteamID64
+        }
 
         // Escape strings for JSON
         char nameEsc[MAX_NAME_LENGTH * 2 + 1];

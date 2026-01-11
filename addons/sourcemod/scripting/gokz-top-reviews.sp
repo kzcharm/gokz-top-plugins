@@ -1162,12 +1162,55 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
 
             if ((reqFlags & (FLAG_OVERALL | FLAG_GAMEPLAY | FLAG_VISUALS)) != 0)
             {
-                char msg[128];
-                FormatEx(msg, sizeof(msg), "%T", "GOKZTop_RatingSaved", client);
-                GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);
+                // Announce ratings to all players
+                char playerName[MAX_NAME_LENGTH];
+                GetClientName(client, playerName, sizeof(playerName));
+                
+                char announcement[256];
+                char parts[3][64];
+                int partCount = 0;
+                
+                if (reqFlags & FLAG_OVERALL)
+                {
+                    char stars[16];
+                    BuildStarsInt(g_iDraftRating[client][Aspect_Overall], stars, sizeof(stars));
+                    Format(parts[partCount], sizeof(parts[]), "Overall: %s", stars);
+                    partCount++;
+                }
+                if (reqFlags & FLAG_GAMEPLAY)
+                {
+                    char stars[16];
+                    BuildStarsInt(g_iDraftRating[client][Aspect_Gameplay], stars, sizeof(stars));
+                    Format(parts[partCount], sizeof(parts[]), "Gameplay: %s", stars);
+                    partCount++;
+                }
+                if (reqFlags & FLAG_VISUALS)
+                {
+                    char stars[16];
+                    BuildStarsInt(g_iDraftRating[client][Aspect_Visuals], stars, sizeof(stars));
+                    Format(parts[partCount], sizeof(parts[]), "Visuals: %s", stars);
+                    partCount++;
+                }
+                
+                Format(announcement, sizeof(announcement), "{lime}%s{default} rated: %s", playerName, parts[0]);
+                for (int i = 1; i < partCount; i++)
+                {
+                    Format(announcement, sizeof(announcement), "%s, %s", announcement, parts[i]);
+                }
+                
+                // Broadcast to all players
+                for (int i = 1; i <= MaxClients; i++)
+                {
+                    if (IsValidClient(i))
+                    {
+                        GOKZ_PrintToChat(i, false, "%s%s", GOKZTOP_PREFIX, announcement);
+                    }
+                }
             }
             if (reqFlags & FLAG_COMMENT)
             {
+                // Comment already sent in chat, no need to announce
+                // Keep private confirmation for the submitting player
                 char msg[128];
                 FormatEx(msg, sizeof(msg), "%T", "GOKZTop_CommentSaved", client);
                 GOKZ_PrintToChat(client, false, "%s%s", GOKZTOP_PREFIX, msg);

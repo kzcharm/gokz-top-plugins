@@ -4,7 +4,7 @@
 // Responsibilities:
 // - Post player connect events to /api/v1/player-sessions/connect
 // - Post player disconnect events to /api/v1/player-sessions/disconnect
-// - Track map_name at connect time (doesn't change if map changes during session)
+// - Track map_name at connect time (OnClientAuthorized is called on map changes)
 // - File-based retry mechanism for failed requests
 
 #include <sourcemod>
@@ -83,81 +83,6 @@ public void OnPluginEnd()
     }
 }
 
-public void OnMapEnd()
-{
-    // Send disconnect events for all connected players before map changes
-    for (int client = 1; client <= MaxClients; client++)
-    {
-        if (!IsClientInGame(client) || IsFakeClient(client))
-        {
-            continue;
-        }
-
-        // Only post disconnect if we successfully connected
-        if (gB_PlayerConnected[client] && gC_PlayerSteamID64[client][0] != '\0')
-        {
-            PostPlayerDisconnect(client, gC_PlayerSteamID64[client]);
-            
-            // Reset connection state but keep steamid64 for reconnection
-            // This marks them as needing to reconnect on the new map
-            gB_PlayerConnected[client] = false;
-            gI_PlayerConnectTime[client] = 0;
-            gB_ConnectRequestInFlight[client] = false;
-            // Keep gC_PlayerSteamID64 and gC_PlayerMapName for now
-        }
-    }
-}
-
-public void OnMapStart()
-{
-    // Send connect events for all players still connected after map change
-    // They were disconnected in OnMapEnd, now reconnect them on the new map
-    for (int client = 1; client <= MaxClients; client++)
-    {
-        if (!IsClientInGame(client) || IsFakeClient(client))
-        {
-            continue;
-        }
-
-        // If we have their steamid64 but they're not marked as connected, reconnect them
-        if (gC_PlayerSteamID64[client][0] != '\0' && !gB_PlayerConnected[client])
-        {
-            // Get new map name
-            char mapName[64];
-            GetCurrentMap(mapName, sizeof(mapName));
-            strcopy(gC_PlayerMapName[client], sizeof(gC_PlayerMapName[]), mapName);
-            
-            // Get new connect time
-            gI_PlayerConnectTime[client] = GetTime();
-            gB_PlayerConnected[client] = true;
-
-            // Post connect event for new map
-            PostPlayerConnect(client, gC_PlayerSteamID64[client], mapName);
-        }
-        else if (gC_PlayerSteamID64[client][0] == '\0')
-        {
-            // Player doesn't have steamid64 yet, try to get it
-            char steamid64[32];
-            if (GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), true))
-            {
-                strcopy(gC_PlayerSteamID64[client], sizeof(gC_PlayerSteamID64[]), steamid64);
-                
-                // Get current map name
-                char mapName[64];
-                GetCurrentMap(mapName, sizeof(mapName));
-                strcopy(gC_PlayerMapName[client], sizeof(gC_PlayerMapName[]), mapName);
-                
-                // Get connect time
-                gI_PlayerConnectTime[client] = GetTime();
-                gB_PlayerConnected[client] = true;
-
-                // Post connect event
-                PostPlayerConnect(client, steamid64, mapName);
-            }
-        }
-    }
-}
-
 // =====[ PLAYER EVENTS ]=====
 
 public void OnClientAuthorized(int client, const char[] auth)
@@ -198,8 +123,9 @@ public void OnClientPutInServer(int client)
         return;
     }
 
-    // If steamid64 wasn't available in OnClientAuthorized, try again
-    if (gC_PlayerSteamID64[client][0] == '\0')
+    // ONLY post if we haven't already connected this player
+    // This is a fallback for when SteamID wasn't available in OnClientAuthorized
+    if (gC_PlayerSteamID64[client][0] == '\0' && !gB_PlayerConnected[client])
     {
         char steamid64[32];
         if (GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), true))
@@ -365,9 +291,10 @@ void PostPlayerConnect(int client, const char[] steamid64, const char[] mapName)
         return;
     }
 
-    // Don't post if request already in flight
+    // Don't post if request already in flight (prevents duplicates)
     if (gB_ConnectRequestInFlight[client])
     {
+        LogMessage("[gokz-top-players] Skipping duplicate connect post for client %d (request in flight)", client);
         return;
     }
 

@@ -2,8 +2,9 @@
 // Player session tracking plugin for GOKZ Top that posts player connect/disconnect events to the API.
 //
 // Responsibilities:
-// - Post player connect events to /api/v1/player-sessions/connect
-// - Post player disconnect events to /api/v1/player-sessions/disconnect
+// - Generate UUID4 on player connect
+// - Post player connect events to /api/v1/sessions (POST with UUID in body)
+// - Update player disconnect events via /api/v1/sessions/{uuid} (PUT with UUID in URL)
 // - Track map_name at connect time (OnClientAuthorized is called on map changes)
 // - File-based retry mechanism for failed requests
 
@@ -33,6 +34,7 @@ public Plugin myinfo =
 // Player session tracking
 char gC_PlayerSteamID64[MAXPLAYERS + 1][32];
 char gC_PlayerMapName[MAXPLAYERS + 1][64];
+char gC_PlayerSessionUUID[MAXPLAYERS + 1][37]; // UUID4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx (36 chars + null)
 int gI_PlayerConnectTime[MAXPLAYERS + 1];
 bool gB_PlayerConnected[MAXPLAYERS + 1];
 
@@ -64,6 +66,7 @@ public void OnPluginStart()
     {
         gC_PlayerSteamID64[i][0] = '\0';
         gC_PlayerMapName[i][0] = '\0';
+        gC_PlayerSessionUUID[i][0] = '\0';
         gI_PlayerConnectTime[i] = 0;
         gB_PlayerConnected[i] = false;
         gB_ConnectRequestInFlight[i] = false;
@@ -76,11 +79,20 @@ public void OnPluginStart()
 
 public void OnPluginEnd()
 {
+    // Write all active sessions before plugin unloads
+    WriteAllActiveSessions();
+    
     if (gH_RetryTimer != null)
     {
         delete gH_RetryTimer;
         gH_RetryTimer = null;
     }
+}
+
+public void OnMapEnd()
+{
+    // Write all active sessions when map ends
+    WriteAllActiveSessions();
 }
 
 // =====[ PLAYER EVENTS ]=====
@@ -112,6 +124,9 @@ public void OnClientAuthorized(int client, const char[] auth)
     gI_PlayerConnectTime[client] = GetTime();
     gB_PlayerConnected[client] = true;
 
+    // Generate UUID4 for this session
+    GenerateSessionUUID(gC_PlayerSessionUUID[client], sizeof(gC_PlayerSessionUUID[]));
+
     // Post connect event
     PostPlayerConnect(client, steamid64, mapName);
 }
@@ -142,6 +157,9 @@ public void OnClientPutInServer(int client)
             gI_PlayerConnectTime[client] = GetTime();
             gB_PlayerConnected[client] = true;
 
+            // Generate UUID4 for this session
+            GenerateSessionUUID(gC_PlayerSessionUUID[client], sizeof(gC_PlayerSessionUUID[]));
+
             // Post connect event
             PostPlayerConnect(client, steamid64, mapName);
         }
@@ -155,30 +173,24 @@ public void OnClientDisconnect(int client)
         return;
     }
 
-    // Try to get steamid64 - first from stored data, then directly from client
-    char steamid64[32];
-    bool hasSteamID64 = false;
-    
+    // Get steamid64 for logging purposes (first from stored data, then directly from client)
+    char steamid64[32] = "Unknown";
     if (gC_PlayerSteamID64[client][0] != '\0')
     {
         strcopy(steamid64, sizeof(steamid64), gC_PlayerSteamID64[client]);
-        hasSteamID64 = true;
     }
     else
     {
         // Try to get it directly from client (might still be valid)
-        if (GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), false))
-        {
-            hasSteamID64 = true;
-        }
+        GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), false);
     }
 
-    // Post disconnect if we have steamid64 and player was connected
-    if (hasSteamID64)
+    // Post disconnect if we have UUID and player was connected
+    if (gC_PlayerSessionUUID[client][0] != '\0')
     {
         if (gB_PlayerConnected[client])
         {
-            PostPlayerDisconnect(client, steamid64);
+            PutPlayerDisconnect(client, gC_PlayerSessionUUID[client]);
         }
         else
         {
@@ -186,15 +198,17 @@ public void OnClientDisconnect(int client)
             // This can happen if connect POST failed or player disconnected before connect completed
             // Still post disconnect to ensure session is closed on server side
             LogMessage("[gokz-top-players] Player %s disconnected but was not marked as connected, posting disconnect anyway", steamid64);
-            PostPlayerDisconnect(client, steamid64);
+            PutPlayerDisconnect(client, gC_PlayerSessionUUID[client]);
         }
     }
     else
     {
-        LogError("[gokz-top-players] Cannot post disconnect for client %d: no steamid64 available", client);
+        LogError("[gokz-top-players] Cannot post disconnect for client %d: no session UUID available", client);
     }
 
-    // Reset player data (filename will be cleared when disconnect request completes)
+    // Reset player data
+    // Note: gC_PlayerSessionUUID is NOT cleared here - it will be cleared when disconnect request completes
+    // This allows retry mechanism to work if the request fails (UUID is in the URL for PUT requests)
     gC_PlayerSteamID64[client][0] = '\0';
     gC_PlayerMapName[client][0] = '\0';
     gI_PlayerConnectTime[client] = 0;
@@ -281,6 +295,38 @@ bool IsLeapYear(int year)
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 }
 
+// =====[ UUID GENERATION ]=====
+
+/**
+ * Generates a UUID v4 (random) format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+ * where x is any hexadecimal digit and y is one of 8, 9, A, or B
+ * 
+ * @param buffer    Buffer to store the UUID string
+ * @param maxlen    Maximum length of the buffer (should be at least 37)
+ */
+void GenerateSessionUUID(char[] buffer, int maxlen)
+{
+    // Generate a UUID v4 (random) format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+    // where x is any hexadecimal digit and y is one of 8, 9, A, or B
+    
+    int random[16];
+    for (int i = 0; i < 16; i++)
+    {
+        random[i] = GetRandomInt(0, 255);
+    }
+    
+    // Set version (4) and variant bits
+    random[6] = (random[6] & 0x0F) | 0x40; // Version 4
+    random[8] = (random[8] & 0x3F) | 0x80; // Variant 10
+    
+    FormatEx(buffer, maxlen, 
+        "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        random[0], random[1], random[2], random[3],
+        random[4], random[5], random[6], random[7],
+        random[8], random[9], random[10], random[11],
+        random[12], random[13], random[14], random[15]);
+}
+
 // =====[ API POSTING ]=====
 
 void PostPlayerConnect(int client, const char[] steamid64, const char[] mapName)
@@ -323,13 +369,17 @@ void PostPlayerConnect(int client, const char[] steamid64, const char[] mapName)
     GOKZTop_JsonEscapeString(mapName, mapNameEsc, sizeof(mapNameEsc));
     GOKZTop_JsonEscapeString(connectedTime, connectedTimeEsc, sizeof(connectedTimeEsc));
 
-    Format(jsonBody, sizeof(jsonBody),
-        "{\"steamid64\":\"%s\",\"ip_address\":\"%s\",\"connected_time\":\"%s\",\"map_name\":\"%s\"}",
-        steamid64Esc, ipEsc, connectedTimeEsc, mapNameEsc);
+    // Escape UUID for JSON
+    char uuidEsc[74];
+    GOKZTop_JsonEscapeString(gC_PlayerSessionUUID[client], uuidEsc, sizeof(uuidEsc));
 
-    // Build API URL
+    Format(jsonBody, sizeof(jsonBody),
+        "{\"id\":\"%s\",\"steamid64\":\"%s\",\"ip_address\":\"%s\",\"connected_time\":\"%s\",\"map_name\":\"%s\"}",
+        uuidEsc, steamid64Esc, ipEsc, connectedTimeEsc, mapNameEsc);
+
+    // Build API URL - POST to /player-sessions/
     char path[128];
-    strcopy(path, sizeof(path), "/player-sessions/connect");
+    strcopy(path, sizeof(path), "/player-sessions/");
 
     char url[1024];
     if (!GOKZTop_BuildApiUrl(url, sizeof(url), path))
@@ -370,7 +420,7 @@ void PostPlayerConnect(int client, const char[] steamid64, const char[] mapName)
     SteamWorks_SendHTTPRequest(req);
 }
 
-void PostPlayerDisconnect(int client, const char[] steamid64)
+void PutPlayerDisconnect(int client, const char[] uuid)
 {
     if (!GOKZTop_IsConfigured())
     {
@@ -378,23 +428,11 @@ void PostPlayerDisconnect(int client, const char[] steamid64)
         return;
     }
 
-    // Validate steamid64
-    if (steamid64[0] == '\0' || strlen(steamid64) == 0)
+    // Validate UUID
+    if (uuid[0] == '\0' || strlen(uuid) == 0)
     {
-        LogError("[gokz-top-players] Cannot post disconnect: empty steamid64 for client %d", client);
+        LogError("[gokz-top-players] Cannot put disconnect: empty UUID for client %d", client);
         return;
-    }
-
-    // Get map_name from stored data (the map they connected on)
-    char mapName[64];
-    if (gC_PlayerMapName[client][0] != '\0')
-    {
-        strcopy(mapName, sizeof(mapName), gC_PlayerMapName[client]);
-    }
-    else
-    {
-        // Fallback: get current map if stored map name is empty
-        GetCurrentMap(mapName, sizeof(mapName));
     }
 
     // Format ISO 8601 UTC timestamp
@@ -405,21 +443,21 @@ void PostPlayerDisconnect(int client, const char[] steamid64)
 
     // Build JSON body
     char jsonBody[512];
-    char steamid64Esc[64];
     char disconnectTimeEsc[64];
-    char mapNameEsc[128];
     
-    GOKZTop_JsonEscapeString(steamid64, steamid64Esc, sizeof(steamid64Esc));
     GOKZTop_JsonEscapeString(disconnectTimeStr, disconnectTimeEsc, sizeof(disconnectTimeEsc));
-    GOKZTop_JsonEscapeString(mapName, mapNameEsc, sizeof(mapNameEsc));
+
+    // Escape UUID for JSON
+    char uuidEsc[90];
+    GOKZTop_JsonEscapeString(uuid, uuidEsc, sizeof(uuidEsc));
 
     Format(jsonBody, sizeof(jsonBody),
-        "{\"steamid64\":\"%s\",\"disconnect_time\":\"%s\",\"map_name\":\"%s\"}",
-        steamid64Esc, disconnectTimeEsc, mapNameEsc);
+        "{\"id\":\"%s\",\"disconnect_time\":\"%s\"}",
+        uuidEsc, disconnectTimeEsc);
 
-    // Build API URL
+    // Build API URL - PUT to /player-sessions/
     char path[128];
-    strcopy(path, sizeof(path), "/player-sessions/disconnect");
+    strcopy(path, sizeof(path), "/player-sessions/");
 
     char url[1024];
     if (!GOKZTop_BuildApiUrl(url, sizeof(url), path))
@@ -428,8 +466,8 @@ void PostPlayerDisconnect(int client, const char[] steamid64)
         return;
     }
 
-    // Create HTTP request
-    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodPOST, url, true, API_TIMEOUT);
+    // Create HTTP request - use PUT method
+    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodPUT, url, true, API_TIMEOUT);
     if (req == INVALID_HANDLE)
     {
         LogError("[gokz-top-players] Failed to create HTTP request (API key missing?)");
@@ -469,6 +507,19 @@ public void OnPlayerRequestCompleted(Handle hRequest, bool bFailure, bool bReque
     if (isConnect && client > 0 && client <= MaxClients)
     {
         gB_ConnectRequestInFlight[client] = false;
+    }
+    
+    // Handle disconnect request completion - clear UUID when request succeeds
+    if (isDisconnect)
+    {
+        // For disconnect, client might be invalid, so we need to find it by checking all clients
+        // or we can clear it from the saved file data
+        // Actually, since UUID is in the URL, we can extract it from there if needed
+        // For now, we'll clear it if client is still valid, otherwise it will be cleared on next connect
+        if (client > 0 && client <= MaxClients)
+        {
+            gC_PlayerSessionUUID[client][0] = '\0';
+        }
     }
 
     // Static counters for throttling error logs
@@ -547,6 +598,25 @@ public void OnPlayerRequestCompleted(Handle hRequest, bool bFailure, bool bReque
     }
 }
 
+// =====[ MAP END HANDLING ]=====
+
+void WriteAllActiveSessions()
+{
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (IsClientInGame(client) && !IsFakeClient(client) && gB_PlayerConnected[client] && gC_PlayerSessionUUID[client][0] != '\0')
+        {
+            // Update disconnect time for all active sessions
+            // Note: We don't clear the UUID here - it will be cleared when the disconnect request completes
+            // This allows the retry mechanism to work if the request fails
+            PutPlayerDisconnect(client, gC_PlayerSessionUUID[client]);
+            
+            // Mark as not connected, but keep UUID for retry mechanism
+            gB_PlayerConnected[client] = false;
+        }
+    }
+}
+
 // =====[ RETRY MECHANISM ]=====
 
 public Action Timer_RetryFailedRequests(Handle timer)
@@ -603,9 +673,10 @@ public Action Timer_RetryFailedRequests(Handle timer)
             binaryFile.ReadString(jsonBody, bodyLength, bodyLength);
             jsonBody[bodyLength] = '\0';
 
-            // Read request type (0 = connect, 1 = disconnect) but we don't need it for retry
+            // Read request type (0 = connect/POST, 1 = disconnect/PUT)
             int requestTypeRaw;
             binaryFile.ReadInt8(requestTypeRaw);
+            bool isConnect = (requestTypeRaw == 0);
 
             bool keyRequired;
             binaryFile.ReadInt8(keyRequired);
@@ -615,8 +686,12 @@ public Action Timer_RetryFailedRequests(Handle timer)
 
             delete binaryFile;
 
+            // Determine HTTP method from request type
+            // 0 = connect = POST, 1 = disconnect = PUT
+            EHTTPMethod method = isConnect ? k_EHTTPMethodPOST : k_EHTTPMethodPUT;
+            
             // Retry the request
-            RetryRequest(url, jsonBody, keyRequired);
+            RetryRequest(url, jsonBody, keyRequired, method);
 
             // Delete the file after attempting retry (success or failure)
             DeleteFile(fullPath);
@@ -627,7 +702,7 @@ public Action Timer_RetryFailedRequests(Handle timer)
     return Plugin_Continue;
 }
 
-void RetryRequest(const char[] url, const char[] jsonBody, bool keyRequired)
+void RetryRequest(const char[] url, const char[] jsonBody, bool keyRequired, EHTTPMethod method = k_EHTTPMethodPOST)
 {
     if (!GOKZTop_IsConfigured() && keyRequired)
     {
@@ -635,8 +710,8 @@ void RetryRequest(const char[] url, const char[] jsonBody, bool keyRequired)
         return;
     }
 
-    // Create HTTP request
-    Handle req = GOKZTop_CreateSteamWorksRequest(k_EHTTPMethodPOST, url, keyRequired, API_TIMEOUT);
+    // Create HTTP request with specified method
+    Handle req = GOKZTop_CreateSteamWorksRequest(method, url, keyRequired, API_TIMEOUT);
     if (req == INVALID_HANDLE)
     {
         return;

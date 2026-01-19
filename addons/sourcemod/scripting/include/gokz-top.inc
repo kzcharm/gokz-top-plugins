@@ -298,9 +298,9 @@ stock bool GOKZTop_ReadResponseBody(Handle req, char[] out, int maxlen)
 }
 
 /**
- * Get mode string for API (KZT, SKZ, VNL).
+ * Get mode string for API (KZT, SKZ, VNL, NKZ).
  * 
- * @param mode      GOKZ mode (0=Vanilla/VNL, 1=Simple/SKZ, 2=Timer/KZT)
+ * @param mode      GOKZ mode (0=Vanilla/VNL, 1=Simple/SKZ, 2=Timer/KZT, 3=NoPerfKZ/NKZ)
  * @param out       Output buffer
  * @param maxlen    Output buffer size
  * @return          True if mode is valid, false otherwise
@@ -322,6 +322,11 @@ stock bool GOKZTop_GetModeString(int mode, char[] out, int maxlen)
         case 2: // Timer/KZT
         {
             strcopy(out, maxlen, "KZT");
+            return true;
+        }
+        case 3: // NoPerfKZ/NKZ
+        {
+            strcopy(out, maxlen, "NKZ");
             return true;
         }
         default:

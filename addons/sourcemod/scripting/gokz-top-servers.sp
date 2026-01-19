@@ -534,14 +534,16 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
         if (LibraryExists("gokz-core"))
         {
             int modeIndex = GOKZ_GetCoreOption(client, Option_Mode);
-            if (modeIndex >= 0 && modeIndex < MODE_COUNT)
+            // GOKZTop_GetModeString handles validation, including NKZ (mode 3)
+            if (!GOKZTop_GetModeString(modeIndex, mode, sizeof(mode)))
             {
-                GOKZTop_GetModeString(modeIndex, mode, sizeof(mode));
+                // If mode is invalid, default to KZT
+                strcopy(mode, sizeof(mode), "KZT");
             }
         }
-        if (strlen(mode) == 0)
+        else
         {
-            strcopy(mode, sizeof(mode), "KZT"); // Default
+            strcopy(mode, sizeof(mode), "KZT"); // Default if GOKZ not available
         }
 
         // Get score

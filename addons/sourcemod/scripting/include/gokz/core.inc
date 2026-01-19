@@ -89,6 +89,7 @@ enum
 	Mode_Vanilla = 0, 
 	Mode_SimpleKZ, 
 	Mode_KZTimer, 
+	Mode_NoPerfKZ, 
 	MODE_COUNT
 };
 
@@ -306,27 +307,31 @@ stock char gC_ModeNames[MODE_COUNT][] =
 {
 	"Vanilla", 
 	"SimpleKZ", 
-	"KZTimer"
+	"KZTimer", 
+	"NoPerfKZ"
 };
 
 stock char gC_ModeNamesShort[MODE_COUNT][] = 
 {
 	"VNL", 
 	"SKZ", 
-	"KZT"
+	"KZT", 
+	"NKZ"
 };
 
 stock char gC_ModeKeys[MODE_COUNT][] = 
 {
 	"vanilla", 
 	"simplekz", 
-	"kztimer"
+	"kztimer", 
+	"noperfkz"
 };
 
 stock float gF_ModeVirtualButtonRanges[MODE_COUNT] = 
 {
 	0.0, 
 	32.0, 
+	70.0, 
 	70.0
 };
 
@@ -334,6 +339,7 @@ stock char gC_ModeStartSounds[MODE_COUNT][] =
 {
 	"common/wpn_select.wav", 
 	"buttons/button9.wav", 
+	"buttons/button3.wav", 
 	"buttons/button3.wav"
 };
 
@@ -341,6 +347,7 @@ stock char gC_ModeEndSounds[MODE_COUNT][] =
 {
 	"common/wpn_select.wav", 
 	"buttons/bell1.wav", 
+	"buttons/button3.wav", 
 	"buttons/button3.wav"
 };
 
@@ -348,6 +355,7 @@ stock char gC_ModeFalseEndSounds[MODE_COUNT][] =
 {
 	"common/wpn_select.wav", 
 	"buttons/button11.wav", 
+	"buttons/button2.wav", 
 	"buttons/button2.wav"
 };
 

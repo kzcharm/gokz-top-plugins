@@ -108,6 +108,32 @@ stock int gI_rankThreshold[MODE_COUNT][RANK_COUNT] = {
 		800000,
 		1000000
 	},
+	{
+		// NKZ mode - not ranked, using placeholder values
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0
+	},
 };
 
 stock char gC_rankName[RANK_COUNT][] = {

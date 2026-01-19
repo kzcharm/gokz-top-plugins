@@ -36,6 +36,24 @@ public Plugin myinfo =
 #define MODE_COUNT 3
 #define RETRY_INTERVAL 15
 
+// Helper function to get the data mode for fetching leaderboard data
+// NKZ uses KZT data but displays as NKZ
+static int GetDataModeForFetch(int displayMode)
+{
+	// NKZ (mode 3) uses KZT (mode 2) data
+	if (displayMode == 3) // Mode_NoPerfKZ
+	{
+		return 2; // Mode_KZTimer
+	}
+	// Only fetch for modes 0-2 (VNL, SKZ, KZT)
+	if (displayMode >= 0 && displayMode < MODE_COUNT)
+	{
+		return displayMode;
+	}
+	// Default to KZT for invalid modes
+	return 2;
+}
+
 static ConVar gCvarApiKey;
 
 // Leaderboard data per player per mode
@@ -322,21 +340,27 @@ static void FetchLeaderboardData(int client, int mode)
     if (client <= 0 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client))
         return;
 
-    if (mode < 0 || mode >= MODE_COUNT)
+    // Map NKZ to KZT for data fetching (NKZ uses KZT data)
+    int dataMode = GetDataModeForFetch(mode);
+    
+    // Only fetch for valid data modes (0-2)
+    if (dataMode < 0 || dataMode >= MODE_COUNT)
         return;
 
     char steamid64[32];
     if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), true))
         return;
 
-    Handle req = GOKZTop_FetchLeaderboardData(steamid64, mode, GetClientUserId(client), 20);
+    // Fetch using dataMode (KZT for NKZ)
+    Handle req = GOKZTop_FetchLeaderboardData(steamid64, dataMode, GetClientUserId(client), 20);
     if (req == INVALID_HANDLE)
         return;
 
     SteamWorks_SetHTTPCallbacks(req, OnHTTPCompleted);
     SteamWorks_SendHTTPRequest(req);
 
-    g_LeaderboardData[client][mode].iLastRetryTime = GetTime();
+    // Store last retry time in the dataMode slot (KZT slot for NKZ)
+    g_LeaderboardData[client][dataMode].iLastRetryTime = GetTime();
 }
 
 public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any data1, any data2)
@@ -365,13 +389,20 @@ public void OnHTTPCompleted(Handle hRequest, bool bFailure, bool bRequestSuccess
     }
 
     // Check if mode changed while request was in flight
-    if (g_bUsesGokz && GOKZ_GetCoreOption(client, Option_Mode) != mode)
+    // Allow NKZ mode when KZT data is fetched (NKZ uses KZT data)
+    if (g_bUsesGokz)
     {
-        if (hRequest != INVALID_HANDLE)
+        int currentMode = GOKZ_GetCoreOption(client, Option_Mode);
+        int expectedDataMode = GetDataModeForFetch(currentMode);
+        // If current mode maps to a different data mode than what was fetched, ignore
+        if (expectedDataMode != mode)
         {
-            delete hRequest;
+            if (hRequest != INVALID_HANDLE)
+            {
+                delete hRequest;
+            }
+            return;
         }
-        return;
     }
 
     int status = view_as<int>(eStatusCode);
@@ -514,10 +545,15 @@ public int Native_GetRating(Handle plugin, int numParams)
     int client = GetNativeCell(1);
     int mode = GetNativeCell(2);
 
-    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+    if (client <= 0 || client > MaxClients)
         return view_as<int>(0.0);
 
-    return view_as<int>(g_LeaderboardData[client][mode].fRating);
+    // Map NKZ to KZT for data access
+    int dataMode = GetDataModeForFetch(mode);
+    if (dataMode < 0 || dataMode >= MODE_COUNT)
+        return view_as<int>(0.0);
+
+    return view_as<int>(g_LeaderboardData[client][dataMode].fRating);
 }
 
 public int Native_GetRank(Handle plugin, int numParams)
@@ -525,10 +561,15 @@ public int Native_GetRank(Handle plugin, int numParams)
     int client = GetNativeCell(1);
     int mode = GetNativeCell(2);
 
-    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+    if (client <= 0 || client > MaxClients)
         return 0;
 
-    return g_LeaderboardData[client][mode].iRank;
+    // Map NKZ to KZT for data access
+    int dataMode = GetDataModeForFetch(mode);
+    if (dataMode < 0 || dataMode >= MODE_COUNT)
+        return 0;
+
+    return g_LeaderboardData[client][dataMode].iRank;
 }
 
 public int Native_GetRegionalRank(Handle plugin, int numParams)
@@ -536,10 +577,15 @@ public int Native_GetRegionalRank(Handle plugin, int numParams)
     int client = GetNativeCell(1);
     int mode = GetNativeCell(2);
 
-    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+    if (client <= 0 || client > MaxClients)
         return 0;
 
-    return g_LeaderboardData[client][mode].iRegionalRank;
+    // Map NKZ to KZT for data access
+    int dataMode = GetDataModeForFetch(mode);
+    if (dataMode < 0 || dataMode >= MODE_COUNT)
+        return 0;
+
+    return g_LeaderboardData[client][dataMode].iRegionalRank;
 }
 
 public int Native_HasRegionalRank(Handle plugin, int numParams)
@@ -547,10 +593,15 @@ public int Native_HasRegionalRank(Handle plugin, int numParams)
     int client = GetNativeCell(1);
     int mode = GetNativeCell(2);
 
-    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+    if (client <= 0 || client > MaxClients)
         return false;
 
-    return g_LeaderboardData[client][mode].bHasRegionalRank;
+    // Map NKZ to KZT for data access
+    int dataMode = GetDataModeForFetch(mode);
+    if (dataMode < 0 || dataMode >= MODE_COUNT)
+        return false;
+
+    return g_LeaderboardData[client][dataMode].bHasRegionalRank;
 }
 
 public int Native_GetRegionCode(Handle plugin, int numParams)
@@ -559,13 +610,21 @@ public int Native_GetRegionCode(Handle plugin, int numParams)
     int mode = GetNativeCell(2);
     int maxlen = GetNativeCell(4);
 
-    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+    if (client <= 0 || client > MaxClients)
     {
         SetNativeString(3, "", maxlen);
         return 0;
     }
 
-    SetNativeString(3, g_LeaderboardData[client][mode].szRegionCode, maxlen);
+    // Map NKZ to KZT for data access
+    int dataMode = GetDataModeForFetch(mode);
+    if (dataMode < 0 || dataMode >= MODE_COUNT)
+    {
+        SetNativeString(3, "", maxlen);
+        return 0;
+    }
+
+    SetNativeString(3, g_LeaderboardData[client][dataMode].szRegionCode, maxlen);
     return 0;
 }
 
@@ -574,10 +633,15 @@ public int Native_IsLeaderboardDataLoaded(Handle plugin, int numParams)
     int client = GetNativeCell(1);
     int mode = GetNativeCell(2);
 
-    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+    if (client <= 0 || client > MaxClients)
         return false;
 
-    return g_LeaderboardData[client][mode].bLoaded;
+    // Map NKZ to KZT for data access
+    int dataMode = GetDataModeForFetch(mode);
+    if (dataMode < 0 || dataMode >= MODE_COUNT)
+        return false;
+
+    return g_LeaderboardData[client][dataMode].bLoaded;
 }
 
 public int Native_RefreshLeaderboardData(Handle plugin, int numParams)
@@ -585,12 +649,17 @@ public int Native_RefreshLeaderboardData(Handle plugin, int numParams)
     int client = GetNativeCell(1);
     int mode = GetNativeCell(2);
 
-    if (client <= 0 || client > MaxClients || mode < 0 || mode >= MODE_COUNT)
+    if (client <= 0 || client > MaxClients)
         return 0;
 
-    // Reset loaded state to force refresh
-    g_LeaderboardData[client][mode].bLoaded = false;
-    FetchLeaderboardData(client, mode);
+    // Map NKZ to KZT for data access
+    int dataMode = GetDataModeForFetch(mode);
+    if (dataMode < 0 || dataMode >= MODE_COUNT)
+        return 0;
+
+    // Reset loaded state to force refresh (use dataMode for storage)
+    g_LeaderboardData[client][dataMode].bLoaded = false;
+    FetchLeaderboardData(client, mode); // Pass original mode, FetchLeaderboardData will map it
     return 1;
 }
 
@@ -607,14 +676,19 @@ void Hook_OnThinkPost(int ent)
             continue;
 
         int mode = g_bUsesGokz ? GOKZ_GetCoreOption(client, Option_Mode) : 2;
-        if (mode < 0 || mode >= MODE_COUNT)
+        // Allow mode 3 (NKZ) - FetchLeaderboardData will map it to KZT
+        if (mode < 0)
             mode = 2;
 
-        // Retry if data not loaded and enough time has passed
-        if (!g_LeaderboardData[client][mode].bLoaded && 
-            (now - g_LeaderboardData[client][mode].iLastRetryTime) >= RETRY_INTERVAL)
+        // Map NKZ to KZT for data checking
+        int dataMode = GetDataModeForFetch(mode);
+
+        // Retry if data not loaded and enough time has passed (check dataMode slot)
+        if (dataMode >= 0 && dataMode < MODE_COUNT &&
+            !g_LeaderboardData[client][dataMode].bLoaded && 
+            (now - g_LeaderboardData[client][dataMode].iLastRetryTime) >= RETRY_INTERVAL)
         {
-            FetchLeaderboardData(client, mode);
+            FetchLeaderboardData(client, mode); // Pass original mode
         }
     }
 }

@@ -64,6 +64,17 @@ bool IsModeGloballed(int mode)
 	return (mode == Mode_Vanilla || mode == Mode_SimpleKZ || mode == Mode_KZTimer);
 }
 
+// Helper function to get the data source mode for rank/points lookup
+// NKZ uses KZT data but displays as NKZ
+int GetDataModeForDisplay(int displayMode)
+{
+	if (displayMode == Mode_NoPerfKZ)
+	{
+		return Mode_KZTimer; // NKZ uses KZT data
+	}
+	return displayMode;
+}
+
 void TruncateSteamGroupTag(char[] tag)
 {
 	if (strlen(tag) > MAX_STEAM_GROUP_TAG_LENGTH)
@@ -268,9 +279,11 @@ public void GOKZTop_OnLeaderboardDataFetched(int client, int mode, float rating,
 	if (IsValidClient(client) && !IsFakeClient(client))
 	{
 		int currentMode = GOKZ_GetCoreOption(client, Option_Mode);
-		if (mode == currentMode)
+		// If KZT data was fetched and player is in NKZ mode, update NKZ tags
+		// Also update if the fetched mode matches current mode
+		if (mode == currentMode || (mode == Mode_KZTimer && currentMode == Mode_NoPerfKZ))
 		{
-			UpdateRank(client, mode);
+			UpdateRank(client, currentMode);
 		}
 	}
 }
@@ -282,6 +295,10 @@ public void UpdateRank(int client, int mode)
 		return;
 	}
 
+	// NKZ uses KZT data but displays as NKZ
+	int dataMode = GetDataModeForDisplay(mode);
+	int displayMode = mode; // Always use original mode for display
+
 	int tagType = GetAvailableTagTypeOrDefault(client);
 
 	if (tagType != ProfileTagType_Rank)
@@ -290,33 +307,33 @@ public void UpdateRank(int client, int mode)
 
 		if (tagType == ProfileTagType_Admin)
 		{
-			FormatEx(clanTag, sizeof(clanTag), "[%s %T]", gC_ModeNamesShort[mode], "Tag - Admin", client);
+			FormatEx(clanTag, sizeof(clanTag), "[%s %T]", gC_ModeNamesShort[displayMode], "Tag - Admin", client);
 			FormatEx(chatTag, sizeof(chatTag), "%T", "Tag - Admin", client);
 			color = TAG_COLOR_ADMIN;
 		}
 		else if (tagType == ProfileTagType_VIP)
 		{
-			FormatEx(clanTag, sizeof(clanTag), "[%s %T]", gC_ModeNamesShort[mode], "Tag - VIP", client);
+			FormatEx(clanTag, sizeof(clanTag), "[%s %T]", gC_ModeNamesShort[displayMode], "Tag - VIP", client);
 			FormatEx(chatTag, sizeof(chatTag), "%T", "Tag - VIP", client);
 			color = TAG_COLOR_VIP;
 		}
 		else if (tagType == ProfileTagType_GlobalRank && gB_GokzTop)
 		{
-			// Check if player is in leaderboards
-			if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
+			// Check if player is in leaderboards (use dataMode for data lookup)
+			if (GOKZTop_IsLeaderboardDataLoaded(client, dataMode))
 			{
-				int rank = GOKZTop_GetRank(client, mode);
+				int rank = GOKZTop_GetRank(client, dataMode);
 				if (rank > 0)
 				{
-					float rating = GOKZTop_GetRating(client, mode);
-					FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
+					float rating = GOKZTop_GetRating(client, dataMode);
+					FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[displayMode], rank);
 					FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
 					GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 				}
 				else
 				{
 					// Not in leaderboards, fall back to mode only
-					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 					FormatEx(chatTag, sizeof(chatTag), "");
 					color = "{default}";
 				}
@@ -324,33 +341,33 @@ public void UpdateRank(int client, int mode)
 			else
 			{
 				// Data not loaded yet, show mode only
-				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 				FormatEx(chatTag, sizeof(chatTag), "");
 				color = "{default}";
 			}
 		}
 		else if (tagType == ProfileTagType_RegionalRank && gB_GokzTop)
 		{
-			// Check if player is in leaderboards and has regional rank
-			if (GOKZTop_IsLeaderboardDataLoaded(client, mode) && GOKZTop_HasRegionalRank(client, mode))
+			// Check if player is in leaderboards and has regional rank (use dataMode for data lookup)
+			if (GOKZTop_IsLeaderboardDataLoaded(client, dataMode) && GOKZTop_HasRegionalRank(client, dataMode))
 			{
-				int regionalRank = GOKZTop_GetRegionalRank(client, mode);
+				int regionalRank = GOKZTop_GetRegionalRank(client, dataMode);
 				if (regionalRank > 0)
 				{
-					float rating = GOKZTop_GetRating(client, mode);
+					float rating = GOKZTop_GetRating(client, dataMode);
 					char regionCode[8];
-					GOKZTop_GetRegionCode(client, mode, regionCode, sizeof(regionCode));
+					GOKZTop_GetRegionCode(client, dataMode, regionCode, sizeof(regionCode));
 					
 					// Format with region code (e.g., "EU#149" or "NA#123")
 					if (regionCode[0] != '\0')
 					{
-						FormatEx(clanTag, sizeof(clanTag), "[%s %s#%d]", gC_ModeNamesShort[mode], regionCode, regionalRank);
+						FormatEx(clanTag, sizeof(clanTag), "[%s %s#%d]", gC_ModeNamesShort[displayMode], regionCode, regionalRank);
 						FormatEx(chatTag, sizeof(chatTag), "%s#%d", regionCode, regionalRank);
 					}
 					else
 					{
 						// Fallback if region code not available
-						FormatEx(clanTag, sizeof(clanTag), "[%s REG#%d]", gC_ModeNamesShort[mode], regionalRank);
+						FormatEx(clanTag, sizeof(clanTag), "[%s REG#%d]", gC_ModeNamesShort[displayMode], regionalRank);
 						FormatEx(chatTag, sizeof(chatTag), "REG#%d", regionalRank);
 					}
 					GetGokzTopRankColorFromRating(rating, color, sizeof(color));
@@ -358,20 +375,20 @@ public void UpdateRank(int client, int mode)
 				else
 				{
 					// Regional rank is 0, fall back to global rank if available
-					if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
+					if (GOKZTop_IsLeaderboardDataLoaded(client, dataMode))
 					{
-						int rank = GOKZTop_GetRank(client, mode);
+						int rank = GOKZTop_GetRank(client, dataMode);
 						if (rank > 0)
 						{
-							float rating = GOKZTop_GetRating(client, mode);
-							FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
+							float rating = GOKZTop_GetRating(client, dataMode);
+							FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[displayMode], rank);
 							FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
 							GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 						}
 						else
 						{
 							// Not in leaderboards, fall back to mode only
-							FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+							FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 							FormatEx(chatTag, sizeof(chatTag), "");
 							color = "{default}";
 						}
@@ -379,7 +396,7 @@ public void UpdateRank(int client, int mode)
 					else
 					{
 						// Data not loaded, show mode only
-						FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+						FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 						FormatEx(chatTag, sizeof(chatTag), "");
 						color = "{default}";
 					}
@@ -388,20 +405,20 @@ public void UpdateRank(int client, int mode)
 			else
 			{
 				// Data not loaded or no regional rank, fall back to global rank if available
-				if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
+				if (GOKZTop_IsLeaderboardDataLoaded(client, dataMode))
 				{
-					int rank = GOKZTop_GetRank(client, mode);
+					int rank = GOKZTop_GetRank(client, dataMode);
 					if (rank > 0)
 					{
-						float rating = GOKZTop_GetRating(client, mode);
-						FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[mode], rank);
+						float rating = GOKZTop_GetRating(client, dataMode);
+						FormatEx(clanTag, sizeof(clanTag), "[%s GL#%d]", gC_ModeNamesShort[displayMode], rank);
 						FormatEx(chatTag, sizeof(chatTag), "GL#%d", rank);
 						GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 					}
 					else
 					{
 						// Not in leaderboards, show mode only
-						FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+						FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 						FormatEx(chatTag, sizeof(chatTag), "");
 						color = "{default}";
 					}
@@ -409,7 +426,7 @@ public void UpdateRank(int client, int mode)
 				else
 				{
 					// Data not loaded, show mode only
-					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 					FormatEx(chatTag, sizeof(chatTag), "");
 					color = "{default}";
 				}
@@ -417,21 +434,21 @@ public void UpdateRank(int client, int mode)
 		}
 		else if (tagType == ProfileTagType_Rating && gB_GokzTop)
 		{
-			// Check if player is in leaderboards
-			if (GOKZTop_IsLeaderboardDataLoaded(client, mode))
+			// Check if player is in leaderboards (use dataMode for data lookup)
+			if (GOKZTop_IsLeaderboardDataLoaded(client, dataMode))
 			{
-				float rating = GOKZTop_GetRating(client, mode);
+				float rating = GOKZTop_GetRating(client, dataMode);
 				if (rating > 0.0)
 				{
 					int floorRating = RoundToFloor(rating);
-					FormatEx(clanTag, sizeof(clanTag), "[%s Lv.%d]", gC_ModeNamesShort[mode], floorRating);
+					FormatEx(clanTag, sizeof(clanTag), "[%s Lv.%d]", gC_ModeNamesShort[displayMode], floorRating);
 					FormatEx(chatTag, sizeof(chatTag), "Lv.%d", floorRating);
 					GetGokzTopRankColorFromRating(rating, color, sizeof(color));
 				}
 				else
 				{
 					// Not in leaderboards, fall back to mode only
-					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+					FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 					FormatEx(chatTag, sizeof(chatTag), "");
 					color = "{default}";
 				}
@@ -439,23 +456,23 @@ public void UpdateRank(int client, int mode)
 			else
 			{
 				// Data not loaded yet, show mode only
-				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 				FormatEx(chatTag, sizeof(chatTag), "");
 				color = "{default}";
 			}
 		}
 		else if (tagType == ProfileTagType_SteamGroup)
 		{
-			// Calculate rank to get the rank color
+			// Calculate rank to get the rank color (use dataMode for data lookup)
 			int rank = 0;
-			if (IsModeGloballed(mode))
+			if (IsModeGloballed(dataMode))
 			{
-				int points = GOKZ_GL_GetRankPoints(client, mode);
+				int points = GOKZ_GL_GetRankPoints(client, dataMode);
 				if (points != -1)
 				{
 					for (rank = 1; rank < RANK_COUNT; rank++)
 					{
-						if (points < gI_rankThreshold[mode][rank])
+						if (points < gI_rankThreshold[dataMode][rank])
 						{
 							break;
 						}
@@ -467,7 +484,7 @@ public void UpdateRank(int client, int mode)
 			
 			if (strlen(gC_OriginalSteamGroupTag[client]) > 0)
 			{
-				FormatEx(clanTag, sizeof(clanTag), "[%s %s]", gC_ModeNamesShort[mode], gC_OriginalSteamGroupTag[client]);
+				FormatEx(clanTag, sizeof(clanTag), "[%s %s]", gC_ModeNamesShort[displayMode], gC_OriginalSteamGroupTag[client]);
 				strcopy(chatTag, sizeof(chatTag), gC_OriginalSteamGroupTag[client]);
 				// Use rank color, fallback to default if rank is invalid
 				if (rank >= 0 && rank < RANK_COUNT)
@@ -482,7 +499,7 @@ public void UpdateRank(int client, int mode)
 			else
 			{
 				// Fallback to mode only if no Steam group tag
-				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+				FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 				chatTag[0] = '\0';
 				color = "{default}";
 			}
@@ -491,7 +508,7 @@ public void UpdateRank(int client, int mode)
 		if (GOKZ_GetOption(client, gC_ProfileOptionNames[ProfileOption_ShowRankClanTag]) != ProfileOptionBool_Enabled)
 		{
 			// Hide the tag (Admin/VIP/SteamGroup) and show only mode, like Rank does
-			FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[mode]);
+			FormatEx(clanTag, sizeof(clanTag), "[%s]", gC_ModeNamesShort[displayMode]);
 		}
 		CS_SetClientClanTag(client, clanTag);
 
@@ -509,11 +526,12 @@ public void UpdateRank(int client, int mode)
 		return;
 	}
 
-	int points = GOKZ_GL_GetRankPoints(client, mode);
+	// Use dataMode for points lookup (NKZ -> KZT)
+	int points = GOKZ_GL_GetRankPoints(client, dataMode);
 	int rank;
 	for (rank = 1; rank < RANK_COUNT; rank++)
 	{
-		if (points < gI_rankThreshold[mode][rank])
+		if (points < gI_rankThreshold[dataMode][rank])
 		{
 			break;
 		}
@@ -524,18 +542,20 @@ public void UpdateRank(int client, int mode)
 	{
 		if (points == -1)
 		{
-			UpdateTags(client, -1, mode);
+			UpdateTags(client, -1, displayMode);
 		}
 		else
 		{
-			UpdateTags(client, rank, mode);
+			UpdateTags(client, rank, displayMode);
 		}
 	}
 
-	if (gI_Rank[client][mode] != rank)
+	// Store rank in the display mode slot (so NKZ has its own slot for display purposes)
+	// But the rank value comes from KZT data
+	if (gI_Rank[client][displayMode] != rank)
 	{
-		gI_Rank[client][mode] = rank;
-		Call_OnRankUpdated(client, mode, rank);
+		gI_Rank[client][displayMode] = rank;
+		Call_OnRankUpdated(client, displayMode, rank);
 	}
 }
 
@@ -596,19 +616,20 @@ bool CanUseTagType(int client, int tagType)
 				return false;
 			}
 			int mode = GOKZ_GetCoreOption(client, Option_Mode);
-			if (!GOKZTop_IsLeaderboardDataLoaded(client, mode))
+			int dataMode = GetDataModeForDisplay(mode); // NKZ uses KZT data
+			if (!GOKZTop_IsLeaderboardDataLoaded(client, dataMode))
 			{
 				return false;
 			}
 			// Check if player has a valid rank/rating
 			if (tagType == ProfileTagType_Rating)
 			{
-				float rating = GOKZTop_GetRating(client, mode);
+				float rating = GOKZTop_GetRating(client, dataMode);
 				return rating > 0.0;
 			}
 			else // ProfileTagType_GlobalRank
 			{
-				int rank = GOKZTop_GetRank(client, mode);
+				int rank = GOKZTop_GetRank(client, dataMode);
 				return rank > 0;
 			}
 		}
@@ -620,12 +641,13 @@ bool CanUseTagType(int client, int tagType)
 				return false;
 			}
 			int mode = GOKZ_GetCoreOption(client, Option_Mode);
-			if (!GOKZTop_IsLeaderboardDataLoaded(client, mode))
+			int dataMode = GetDataModeForDisplay(mode); // NKZ uses KZT data
+			if (!GOKZTop_IsLeaderboardDataLoaded(client, dataMode))
 			{
 				return false;
 			}
 			// Check if player has regional rank available
-			return GOKZTop_HasRegionalRank(client, mode) && GOKZTop_GetRegionalRank(client, mode) > 0;
+			return GOKZTop_HasRegionalRank(client, dataMode) && GOKZTop_GetRegionalRank(client, dataMode) > 0;
 		}
 		default: return false;
 	}

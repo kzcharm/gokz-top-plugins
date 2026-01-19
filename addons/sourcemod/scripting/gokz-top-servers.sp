@@ -574,6 +574,10 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
             teleports = GOKZ_GetTeleportCount(client);
         }
 
+        // Get player tag (clan tag)
+        char tag[64];
+        CS_GetClientClanTag(client, tag, sizeof(tag));
+
         // Get SteamID64 last (matches axekz order - call after other functions)
         char steamid64[32];
         if (!GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64)))
@@ -584,8 +588,10 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
         // Escape strings for JSON
         char nameEsc[MAX_NAME_LENGTH * 2 + 1];
         char statusEsc[64];
+        char tagEsc[128];
         GOKZTop_JsonEscapeString(name, nameEsc, sizeof(nameEsc));
         GOKZTop_JsonEscapeString(status, statusEsc, sizeof(statusEsc));
+        GOKZTop_JsonEscapeString(tag, tagEsc, sizeof(tagEsc));
 
         // Add comma if not first player
         if (!firstPlayer)
@@ -596,8 +602,8 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
 
         // Add player object
         len += Format(buffer[len], maxlen - len,
-            "{\"name\":\"%s\",\"steamid64\":\"%s\",\"score\":%d,\"duration\":%.3f,\"timer_time\":%.3f,\"mode\":\"%s\",\"is_paused\":%s,\"status\":\"%s\",\"teleports\":%d}",
-            nameEsc, steamid64, score, duration, timerTime, mode, isPaused ? "true" : "false", statusEsc, teleports);
+            "{\"name\":\"%s\",\"steamid64\":\"%s\",\"score\":%d,\"duration\":%.3f,\"timer_time\":%.3f,\"mode\":\"%s\",\"is_paused\":%s,\"status\":\"%s\",\"teleports\":%d,\"tag\":\"%s\"}",
+            nameEsc, steamid64, score, duration, timerTime, mode, isPaused ? "true" : "false", statusEsc, teleports, tagEsc);
 
         if (len >= maxlen - 100)
         {

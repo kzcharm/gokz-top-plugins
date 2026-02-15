@@ -4,10 +4,10 @@
 
 #include <gokz/core>
 #include <gokz/profile>
-#include <gokz/global>
 
 #undef REQUIRE_EXTENSIONS
 #undef REQUIRE_PLUGIN
+#include <gokz/global>
 #include <gokz/chat>
 #include <gokz-top>
 
@@ -27,6 +27,7 @@ public Plugin myinfo =
 
 int gI_Rank[MAXPLAYERS + 1][MODE_COUNT];
 bool gB_Localranks;
+bool gB_Global;
 bool gB_Chat;
 bool gB_GokzTop;
 char gC_OriginalSteamGroupTag[MAXPLAYERS + 1][32];
@@ -53,6 +54,28 @@ stock char gC_gokzTopRankColor[11][] = {
 	"{red}",         // 9 - Level 9
 	"{gold}"         // 10 - Level 10
 };
+
+static bool GlobalNativeAvailable(const char[] nativeName)
+{
+	return GetFeatureStatus(FeatureType_Native, nativeName) == FeatureStatus_Available;
+}
+
+bool GlobalRankDataAvailable()
+{
+	return gB_Global && GlobalNativeAvailable("GOKZ_GL_GetRankPoints");
+}
+
+bool GlobalProfileDataAvailable()
+{
+	return GlobalRankDataAvailable()
+		&& GlobalNativeAvailable("GOKZ_GL_GetPoints")
+		&& GlobalNativeAvailable("GOKZ_GL_GetFinishes");
+}
+
+bool GlobalPointsUpdateAvailable()
+{
+	return gB_Global && GlobalNativeAvailable("GOKZ_GL_UpdatePoints");
+}
 
 #include "gokz-profile/options.sp"
 #include "gokz-profile/profile.sp"
@@ -103,6 +126,7 @@ public void OnPluginStart()
 public void OnAllPluginsLoaded()
 {
 	gB_Localranks = LibraryExists("gokz-localranks");
+	gB_Global = LibraryExists("gokz-global");
 	gB_Chat = LibraryExists("gokz-chat");
 	gB_GokzTop = LibraryExists("gokz-top-core");
 
@@ -124,6 +148,7 @@ public void OnAllPluginsLoaded()
 public void OnLibraryAdded(const char[] name)
 {
 	gB_Localranks = gB_Localranks || StrEqual(name, "gokz-localranks");
+	gB_Global = gB_Global || StrEqual(name, "gokz-global");
 	gB_Chat = gB_Chat || StrEqual(name, "gokz-chat");
 	gB_GokzTop = gB_GokzTop || StrEqual(name, "gokz-top-core");
 }
@@ -131,6 +156,7 @@ public void OnLibraryAdded(const char[] name)
 public void OnLibraryRemoved(const char[] name)
 {
 	gB_Localranks = gB_Localranks && !StrEqual(name, "gokz-localranks");
+	gB_Global = gB_Global && !StrEqual(name, "gokz-global");
 	gB_Chat = gB_Chat && !StrEqual(name, "gokz-chat");
 	gB_GokzTop = gB_GokzTop && !StrEqual(name, "gokz-top-core");
 }
@@ -465,7 +491,7 @@ public void UpdateRank(int client, int mode)
 		{
 			// Calculate rank to get the rank color (use dataMode for data lookup)
 			int rank = 0;
-			if (IsModeGloballed(dataMode))
+			if (IsModeGloballed(dataMode) && GlobalRankDataAvailable())
 			{
 				int points = GOKZ_GL_GetRankPoints(client, dataMode);
 				if (points != -1)
@@ -522,6 +548,21 @@ public void UpdateRank(int client, int mode)
 			{
 				GOKZ_CH_SetChatTag(client, "", "{default}");
 			}
+		}
+		return;
+	}
+
+	if (!GlobalRankDataAvailable())
+	{
+		if (GOKZ_GetCoreOption(client, Option_Mode) == mode)
+		{
+			UpdateTags(client, -1, displayMode);
+		}
+
+		if (gI_Rank[client][displayMode] != 0)
+		{
+			gI_Rank[client][displayMode] = 0;
+			Call_OnRankUpdated(client, displayMode, 0);
 		}
 		return;
 	}

@@ -19,10 +19,20 @@ void ShowProfile(int client, int player = 0)
 		profileTargetPlayer[client] = player;
 		profileMode[client] = GOKZ_GetCoreOption(player, Option_Mode);
 	}
+
+	if (!GlobalRankDataAvailable())
+	{
+		profileWaitingForUpdate[client] = false;
+		Menu menu = new Menu(MenuHandler_Profile);
+		menu.SetTitle("%T - %N", "Profile Menu - Title", client, profileTargetPlayer[client]);
+		ProfileMenuAddItems(client, menu);
+		menu.Display(client, MENU_TIME_FOREVER);
+		return;
+	}
 	
 	if (GOKZ_GL_GetRankPoints(profileTargetPlayer[client], profileMode[client]) < 0)
 	{
-		if (!profileWaitingForUpdate[client])
+		if (!profileWaitingForUpdate[client] && GlobalPointsUpdateAvailable())
 		{
 			GOKZ_GL_UpdatePoints(profileTargetPlayer[client], profileMode[client]);
 			profileWaitingForUpdate[client] = true;
@@ -82,11 +92,21 @@ public int MenuHandler_Profile(Menu menu, MenuAction action, int param1, int par
 		}
 		else if (StrEqual(info, ITEM_INFO_RANK, false))
 		{
+			if (!GlobalRankDataAvailable())
+			{
+				ShowProfile(param1);
+				return 0;
+			}
 			ShowRankInfo(param1);
 			return 0;
 		}
 		else if (StrEqual(info, ITEM_INFO_POINTS, false))
 		{
+			if (!GlobalProfileDataAvailable())
+			{
+				ShowProfile(param1);
+				return 0;
+			}
 			ShowPointsInfo(param1);
 			return 0;
 		}
@@ -113,6 +133,11 @@ static void ProfileMenuAddItems(int client, Menu menu)
 	FormatEx(display, sizeof(display), "%T: %s",
 			 "Profile Menu - Mode", client, gC_ModeNames[mode]);
 	menu.AddItem(ITEM_INFO_MODE, display);
+
+	if (!GlobalRankDataAvailable())
+	{
+		return;
+	}
 	
 	FormatEx(display, sizeof(display), "%T: %s",
 			 "Profile Menu - Rank", client, gC_rankName[gI_Rank[player][mode]]);
@@ -125,6 +150,12 @@ static void ProfileMenuAddItems(int client, Menu menu)
 
 static void ShowRankInfo(int client)
 {
+	if (!GlobalRankDataAvailable())
+	{
+		ShowProfile(client);
+		return;
+	}
+
 	Menu menu = new Menu(MenuHandler_RankInfo);
 	menu.SetTitle("%T - %N", "Rank Info Menu - Title", client, profileTargetPlayer[client]);
 	RankInfoMenuAddItems(client, menu);
@@ -179,6 +210,12 @@ static int MenuHandler_RankInfo(Menu menu, MenuAction action, int param1, int pa
 
 static void ShowPointsInfo(int client)
 {
+	if (!GlobalProfileDataAvailable())
+	{
+		ShowProfile(client);
+		return;
+	}
+
 	Menu menu = new Menu(MenuHandler_PointsInfo);
 	menu.SetTitle("%T - %N", "Points Info Menu - Title", client, profileTargetPlayer[client]);
 	PointsInfoMenuAddItems(client, menu);

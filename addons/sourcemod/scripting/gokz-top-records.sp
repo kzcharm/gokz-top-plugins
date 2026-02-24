@@ -210,6 +210,11 @@ public void OnMapStart()
 
     SetupAPI();
 
+    if (gH_IntegrityTimer != null && !IsValidHandle(gH_IntegrityTimer))
+    {
+        gH_IntegrityTimer = null;
+    }
+
     if (gH_IntegrityTimer == null)
     {
         gH_IntegrityTimer = CreateTimer(INTEGRITY_INTERVAL, IntegrityChecks, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
@@ -227,7 +232,10 @@ public void OnPluginEnd()
 {
     if (gH_IntegrityTimer != null)
     {
-        delete gH_IntegrityTimer;
+        if (IsValidHandle(gH_IntegrityTimer))
+        {
+            delete gH_IntegrityTimer;
+        }
         gH_IntegrityTimer = null;
     }
 }

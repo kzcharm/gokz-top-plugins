@@ -11,6 +11,9 @@
 #include <gokz/chat>
 #include <gokz-top>
 
+// gokz-top.inc defines MODE_COUNT=3; use MODE_COUNT from gokz/core.inc instead.
+#undef MODE_COUNT
+
 #pragma newdecls required
 #pragma semicolon 1
 

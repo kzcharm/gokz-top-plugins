@@ -296,15 +296,32 @@ static void PrintGlobalCheckToChat(int client)
         gB_GloballyVerified[client] ? "{green}✓" : "{darkred}X");
 
     char modeCheck[256];
+    modeCheck[0] = '\0';
+
     int modeCount = sizeof(gC_ModeNamesShort);
-    bool modeOk = gB_ModeCheck[0] && TopRecordsAllowedByGlobalCheck(client, 0);
-    FormatEx(modeCheck, sizeof(modeCheck), "{purple}%s %s", gC_ModeNamesShort[0], modeOk ? "{green}✓" : "{darkred}X");
-    for (int i = 1; i < modeCount; i++)
+    bool modeOk;
+    for (int i = 0; i < modeCount; i++)
     {
         modeOk = gB_ModeCheck[i] && TopRecordsAllowedByGlobalCheck(client, i);
-        FormatEx(modeCheck, sizeof(modeCheck), "%s {grey}| {purple}%s %s", modeCheck, gC_ModeNamesShort[i], modeOk ? "{green}✓" : "{darkred}X");
+        if (!modeOk)
+        {
+            continue;
+        }
+
+        if (modeCheck[0] == '\0')
+        {
+            FormatEx(modeCheck, sizeof(modeCheck), "{purple}%s {green}✓", gC_ModeNamesShort[i]);
+        }
+        else
+        {
+            FormatEx(modeCheck, sizeof(modeCheck), "%s {grey}| {purple}%s {green}✓", modeCheck, gC_ModeNamesShort[i]);
+        }
     }
-    GOKZ_PrintToChat(client, false, "%s", modeCheck);
+
+    if (modeCheck[0] != '\0')
+    {
+        GOKZ_PrintToChat(client, false, "%s", modeCheck);
+    }
 }
 
 // =====[ GOKZ EVENTS ]=====

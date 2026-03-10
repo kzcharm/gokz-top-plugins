@@ -35,18 +35,38 @@ public Plugin myinfo =
 
 // Configuration
 ConVar gCV_UpdateInterval = null;
+ConVar gCV_DebugStatusJson = null;
 char gC_ServerIP[64];
 bool gB_ServerIPReady = false;
 bool gB_IPFetchInProgress = false;
 
 // Request tracking
 bool gB_RequestInFlight = false;
+bool gB_LastStatusJsonSet = false;
+char gC_LastStatusJson[8192];
 
 // Timer
 Handle gH_StatusTimer = null;
 
 // Player status tracking
 char gC_PlayerStatus[MAXPLAYERS + 1][32];
+
+// =====[ UTIL ]=====
+void StripNonAscii(const char[] input, char[] output, int maxlen)
+{
+    output[0] = '\0';
+    int outLen = 0;
+
+    for (int i = 0; input[i] != '\0' && outLen + 1 < maxlen; i++)
+    {
+        int c = input[i] & 0xFF;
+        if (c >= 0x20 && c <= 0x7E)
+        {
+            output[outLen++] = view_as<char>(c);
+            output[outLen] = '\0';
+        }
+    }
+}
 
 // =====[ PLUGIN LIFECYCLE ]=====
 
@@ -66,6 +86,17 @@ public void OnPluginStart()
         0.1,
         true,
         60.0
+    );
+
+    gCV_DebugStatusJson = AutoExecConfig_CreateConVar(
+        "gokz_top_servers_debug_status_json",
+        "0",
+        "Log last server status JSON body when API returns HTTP 400 (debug only)",
+        FCVAR_NONE,
+        true,
+        0.0,
+        true,
+        1.0
     );
 
     AutoExecConfig_ExecuteFile();
@@ -454,6 +485,8 @@ void PostServerStatus()
         LogError("[gokz-top-servers] Failed to build JSON body");
         return;
     }
+    strcopy(gC_LastStatusJson, sizeof(gC_LastStatusJson), jsonBody);
+    gB_LastStatusJsonSet = true;
 
     // Build API URL
     char path[128];
@@ -518,6 +551,8 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
         {
             strcopy(name, sizeof(name), "Unknown");
         }
+        char nameAscii[MAX_NAME_LENGTH];
+        StripNonAscii(name, nameAscii, sizeof(nameAscii));
 
         // Get duration first (matches axekz order)
         float duration = GetClientTime(client);
@@ -577,6 +612,8 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
         // Get player tag (clan tag)
         char tag[64];
         CS_GetClientClanTag(client, tag, sizeof(tag));
+        char tagAscii[64];
+        StripNonAscii(tag, tagAscii, sizeof(tagAscii));
 
         // Get SteamID64 last (matches axekz order - call after other functions)
         char steamid64[32];
@@ -589,9 +626,9 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
         char nameEsc[MAX_NAME_LENGTH * 2 + 1];
         char statusEsc[64];
         char tagEsc[128];
-        GOKZTop_JsonEscapeString(name, nameEsc, sizeof(nameEsc));
+        GOKZTop_JsonEscapeString(nameAscii, nameEsc, sizeof(nameEsc));
         GOKZTop_JsonEscapeString(status, statusEsc, sizeof(statusEsc));
-        GOKZTop_JsonEscapeString(tag, tagEsc, sizeof(tagEsc));
+        GOKZTop_JsonEscapeString(tagAscii, tagEsc, sizeof(tagEsc));
 
         // Add comma if not first player
         if (!firstPlayer)
@@ -660,6 +697,11 @@ public void OnServerStatusPosted(Handle hRequest, bool bFailure, bool bRequestSu
             {
                 LogError("[gokz-top-servers] Failed to post server status (HTTP %d)", status);
             }
+
+            if (status == 400 && gCV_DebugStatusJson != null && gCV_DebugStatusJson.BoolValue && gB_LastStatusJsonSet)
+            {
+                LogError("[gokz-top-servers] Debug status JSON (truncated): %.768s", gC_LastStatusJson);
+            }
         }
         if (hRequest != INVALID_HANDLE)
         {
@@ -713,4 +755,3 @@ public void GOKZ_OnTimerEnd_Post(int client, int course, float time, int telepor
 
     strcopy(gC_PlayerStatus[client], sizeof(gC_PlayerStatus[]), "finished");
 }
-

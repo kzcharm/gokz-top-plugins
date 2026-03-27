@@ -551,8 +551,6 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
         {
             strcopy(name, sizeof(name), "Unknown");
         }
-        char nameAscii[MAX_NAME_LENGTH];
-        StripNonAscii(name, nameAscii, sizeof(nameAscii));
 
         // Get duration first (matches axekz order)
         float duration = GetClientTime(client);
@@ -626,7 +624,7 @@ bool BuildServerStatusJson(char[] buffer, int maxlen, const char[] ip, int port,
         char nameEsc[MAX_NAME_LENGTH * 2 + 1];
         char statusEsc[64];
         char tagEsc[128];
-        GOKZTop_JsonEscapeString(nameAscii, nameEsc, sizeof(nameEsc));
+        GOKZTop_JsonEscapeString(name, nameEsc, sizeof(nameEsc));
         GOKZTop_JsonEscapeString(status, statusEsc, sizeof(statusEsc));
         GOKZTop_JsonEscapeString(tagAscii, tagEsc, sizeof(tagEsc));
 

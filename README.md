@@ -11,5 +11,5 @@ SourceMod plugins for integrating your GOKZ server with [GOKZ.top](https://gokz.
 5. Edit `cfg/sourcemod/gokz-top/apikey.cfg` and add your key:
 
 ```sourcepawn
-sm_gokz_top_apikey "YOUR_API_KEY_HERE"
+gokz_top_apikey "YOUR_API_KEY_HERE"
 ```

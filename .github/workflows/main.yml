@@ -103,8 +103,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          full_name="gokz-example-v${GOKZ_VERSION}"
-          upgrade_name="gokz-example-v${GOKZ_VERSION}-upgrade"
+          full_name="gokz-top-plugins-${GOKZ_VERSION}"
+          upgrade_name="gokz-top-plugins-${GOKZ_VERSION}-upgrade"
 
           mkdir -p dist/full dist/upgrade
           rsync -av \
@@ -134,7 +134,7 @@ jobs:
       - name: upload-full
         uses: actions/upload-artifact@v4
         with:
-          name: gokz-example-v${{ env.GOKZ_VERSION }}
+          name: gokz-top-plugins-${{ env.GOKZ_VERSION }}
           path: |
             .
             !sm*
@@ -147,7 +147,7 @@ jobs:
       - name: upload-upgrade
         uses: actions/upload-artifact@v4
         with:
-          name: gokz-example-v${{ env.GOKZ_VERSION }}-upgrade
+          name: gokz-top-plugins-${{ env.GOKZ_VERSION }}-upgrade
           path: |
             .
             !sm*
@@ -166,5 +166,5 @@ jobs:
           name: ${{ env.GOKZ_VERSION }}
           generate_release_notes: true
           files: |
-            dist/gokz-example-v${{ env.GOKZ_VERSION }}.zip
-            dist/gokz-example-v${{ env.GOKZ_VERSION }}-upgrade.zip
+            dist/gokz-top-plugins-${{ env.GOKZ_VERSION }}.zip
+            dist/gokz-top-plugins-${{ env.GOKZ_VERSION }}-upgrade.zip

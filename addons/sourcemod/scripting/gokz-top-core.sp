@@ -334,14 +334,14 @@ bool HasAPIKey()
 void CreateAPIKeyConfigIfNotExists()
 {
 	char configPath[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, configPath, sizeof(configPath), "cfg/%s/apikey.cfg", GOKZ_TOP_CFG_FOLDER);
+	Format(configPath, sizeof(configPath), "cfg/%s/apikey.cfg", GOKZ_TOP_CFG_FOLDER);
 	if (FileExists(configPath))
 	{
 		return;
 	}
 
 	char dirPath[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, dirPath, sizeof(dirPath), "cfg/%s", GOKZ_TOP_CFG_FOLDER);
+	Format(dirPath, sizeof(dirPath), "cfg/%s", GOKZ_TOP_CFG_FOLDER);
 	if (!DirExists(dirPath))
 	{
 		CreateDirectory(dirPath, 511);

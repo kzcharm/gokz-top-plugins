@@ -11,7 +11,9 @@ void UnloadLegacyProfilePlugin()
 bool IsLegacyProfileSurfaceOccupied()
 {
 	return GetFeatureStatus(FeatureType_Native, "GOKZ_PF_GetRank") == FeatureStatus_Available
-		|| LibraryExists("gokz-profile");
+		|| LibraryExists("gokz-profile")
+		|| FindPluginByFile("gokz-profile.smx") != INVALID_HANDLE
+		|| FileExists(LEGACY_PROFILE_PLUGIN);
 }
 
 void DisableLegacyProfileBinary()

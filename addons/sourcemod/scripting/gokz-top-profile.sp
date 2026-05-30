@@ -19,7 +19,7 @@
 public Plugin myinfo =
 {
 	name = "GOKZ Top Profile",
-	author = "OpenAI",
+	author = "Cinyan10",
 	description = "Player profiles, ranks, tags, rating, and scoreboard levels backed by gokz-top v2",
 	version = GOKZ_TOP_PROFILE_VERSION,
 	url = "https://gokz.top"

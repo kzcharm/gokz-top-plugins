@@ -21,7 +21,7 @@
 public Plugin myinfo =
 {
 	name = "GOKZ Top Core",
-	author = "OpenAI",
+	author = "Cinyan10",
 	description = "API wrapper and shared HTTP utilities for gokz-top plugins",
 	version = GOKZ_TOP_VERSION,
 	url = "https://gokz.top"

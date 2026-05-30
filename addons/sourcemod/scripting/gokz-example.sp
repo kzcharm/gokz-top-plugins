@@ -13,7 +13,7 @@
 public Plugin myinfo =
 {
 	name = "GOKZ Example",
-	author = "OpenAI",
+	author = "Cinyan10",
 	description = "Example GOKZ extension plugin template",
 	version = GOKZ_VERSION,
 	url = GOKZ_SOURCE_URL

@@ -42,7 +42,7 @@ enum PublicIPProvider
 public Plugin myinfo =
 {
 	name = "GOKZ Top Servers",
-	author = "OpenAI",
+	author = "Cinyan10",
 	description = "Live server status heartbeats for gokz-top",
 	version = GOKZ_TOP_SERVERS_VERSION,
 	url = "https://gokz.top"

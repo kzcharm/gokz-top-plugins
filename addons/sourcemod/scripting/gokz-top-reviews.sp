@@ -13,7 +13,7 @@
 public Plugin myinfo =
 {
 	name = "GOKZ Top Reviews",
-	author = "OpenAI",
+	author = "Cinyan10",
 	description = "Rate maps and browse map comments through the gokz-top v2 API",
 	version = GOKZ_VERSION,
 	url = GOKZ_SOURCE_URL

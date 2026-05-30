@@ -65,6 +65,7 @@ bool BuildServerHeartbeatPayload(
 	char escapedHostname[GOKZ_TOP_HOSTNAME_LENGTH * 2];
 	char escapedMap[PLATFORM_MAX_PATH * 2];
 	int playerCount = GetHeartbeatPlayerCount();
+	int maxPlayers = GetHeartbeatMaxPlayers();
 	EscapeJSONString(hostname, escapedHostname, sizeof(escapedHostname));
 	EscapeJSONString(gC_CurrentMap, escapedMap, sizeof(escapedMap));
 
@@ -76,7 +77,7 @@ bool BuildServerHeartbeatPayload(
 		escapedHostname,
 		escapedMap,
 		playerCount,
-		MaxClients);
+		maxPlayers);
 
 	bool first = true;
 	for (int client = 1; client <= MaxClients; client++)
@@ -209,6 +210,17 @@ int GetHeartbeatPlayerCount()
 	}
 
 	return playerCount;
+}
+
+int GetHeartbeatMaxPlayers()
+{
+	int maxPlayers = GetMaxHumanPlayers();
+	if (maxPlayers > 0)
+	{
+		return maxPlayers;
+	}
+
+	return MaxClients;
 }
 
 void EscapeJSONString(const char[] input, char[] output, int maxLength)

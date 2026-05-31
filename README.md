@@ -8,6 +8,7 @@ SourceMod plugins for integrating a CS:GO GOKZ server with [GOKZ.TOP](https://go
 - `gokz-top-servers`: live server status heartbeats for the public server browser.
 - `gokz-top-profile`: in-game profile, rating, rank, tag, and scoreboard integrations.
 - `gokz-top-reviews`: in-game map review submission.
+- `gokz-top-replays`: eligible jump replay uploads for jumpstat replay viewing.
 
 ## Requirements
 
@@ -73,7 +74,7 @@ exec sourcemod/gokz-top/apikey.cfg
 
 After the server is running:
 
-1. Check the SourceMod error logs for `gokz-top-core`, `gokz-top-servers`, `gokz-top-profile`, or `gokz-top-reviews` errors.
+1. Check the SourceMod error logs for `gokz-top-core`, `gokz-top-servers`, `gokz-top-profile`, `gokz-top-reviews`, or `gokz-top-replays` errors.
 2. Open [Admin Servers](https://gokz.top/admin/servers) and confirm the server is assigned to the group using the same API key.
 3. Open the public server browser on [gokz.top/servers](https://gokz.top/servers) and confirm the server status updates after the heartbeat interval.
 
@@ -88,6 +89,7 @@ Example:
 ./spcomp gokz-top-servers.sp
 ./spcomp gokz-top-profile.sp
 ./spcomp gokz-top-reviews.sp
+./spcomp gokz-top-replays.sp
 ```
 
 The GitHub Actions workflow is the reference release build.

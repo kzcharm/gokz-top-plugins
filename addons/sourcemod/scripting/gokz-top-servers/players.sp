@@ -86,7 +86,7 @@ void GetClientClanTagText(int client, char[] buffer, int maxLength)
 
 int GetClientScore(int client)
 {
-	return GetEntProp(client, Prop_Data, "m_iFrags");
+	return CS_GetClientContributionScore(client);
 }
 
 void GetPlayerStatusValue(int client, char[] buffer, int maxLength)

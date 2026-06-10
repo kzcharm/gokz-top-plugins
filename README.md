@@ -2,8 +2,6 @@
 
 SourceMod plugins for integrating a GOKZ server with [GOKZ.TOP](https://gokz.top).
 
-
-
 ## Requirements
 
 - SourceMod 1.11+
@@ -33,12 +31,11 @@ cfg/sourcemod/gokz-top/apikey.cfg
 Paste your server group API key there:
 
 ```cfg
-gokz_top_api_key "paste-your-server-group-api-key-here"
+paste-your-server-group-api-key-here
 ```
 
-Reload the config or restart the server:
+Reload the API key or restart the server:
 
 ```cfg
-exec sourcemod/gokz-top/apikey.cfg
+gokz_top_reload_api_key
 ```
-

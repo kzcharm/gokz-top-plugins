@@ -62,8 +62,8 @@ bool BuildServerHeartbeatPayload(
 	char[] buffer,
 	int maxLength)
 {
-	char escapedHostname[GOKZ_TOP_HOSTNAME_LENGTH * 2];
-	char escapedMap[PLATFORM_MAX_PATH * 2];
+	char escapedHostname[GOKZ_TOP_HOSTNAME_LENGTH * 6];
+	char escapedMap[PLATFORM_MAX_PATH * 6];
 	int playerCount = GetHeartbeatPlayerCount();
 	int maxPlayers = GetHeartbeatMaxPlayers();
 	EscapeJSONString(hostname, escapedHostname, sizeof(escapedHostname));
@@ -122,11 +122,11 @@ bool BuildPlayerHeartbeatJSON(int client, char[] buffer, int maxLength)
 	char clanTag[GOKZ_TOP_CLAN_TAG_LENGTH];
 	char mode[8];
 	char status[16];
-	char escapedName[MAX_NAME_LENGTH * 2];
+	char escapedName[MAX_NAME_LENGTH * 6];
 	char escapedMode[16];
-	char escapedSteamID64[GOKZ_TOP_STEAMID64_LENGTH * 2];
-	char escapedClanTag[GOKZ_TOP_CLAN_TAG_LENGTH * 2];
-	char tagValue[(GOKZ_TOP_CLAN_TAG_LENGTH * 2) + 4];
+	char escapedSteamID64[GOKZ_TOP_STEAMID64_LENGTH * 6];
+	char escapedClanTag[GOKZ_TOP_CLAN_TAG_LENGTH * 6];
+	char tagValue[(GOKZ_TOP_CLAN_TAG_LENGTH * 6) + 4];
 	char timerValue[32];
 	char stageValue[16];
 
@@ -225,6 +225,7 @@ int GetHeartbeatMaxPlayers()
 
 void EscapeJSONString(const char[] input, char[] output, int maxLength)
 {
+	char hexDigits[] = "0123456789abcdef";
 	int written = 0;
 	for (int i = 0; input[i] != '\0' && written < maxLength - 1; i++)
 	{
@@ -235,10 +236,133 @@ void EscapeJSONString(const char[] input, char[] output, int maxLength)
 			continue;
 		}
 
+		int value = input[i];
+		if (value < 0)
+		{
+			value += 256;
+		}
+
+		if (value < 0x20)
+		{
+			if (written >= maxLength - 6)
+			{
+				break;
+			}
+
+			output[written++] = '\\';
+			output[written++] = 'u';
+			output[written++] = '0';
+			output[written++] = '0';
+			output[written++] = hexDigits[(value >> 4) & 0x0f];
+			output[written++] = hexDigits[value & 0x0f];
+			continue;
+		}
+
+		if (value >= 0x80)
+		{
+			int sequenceLength = GetUTF8SequenceLength(value);
+			if (IsValidUTF8Sequence(input, i, sequenceLength))
+			{
+				if (written >= maxLength - sequenceLength)
+				{
+					break;
+				}
+
+				for (int offset = 0; offset < sequenceLength; offset++)
+				{
+					output[written++] = input[i + offset];
+				}
+				i += sequenceLength - 1;
+				continue;
+			}
+
+			if (written >= maxLength - 6)
+			{
+				break;
+			}
+
+			output[written++] = '\\';
+			output[written++] = 'u';
+			output[written++] = '0';
+			output[written++] = '0';
+			output[written++] = hexDigits[(value >> 4) & 0x0f];
+			output[written++] = hexDigits[value & 0x0f];
+			continue;
+		}
+
 		output[written++] = input[i];
 	}
 
 	output[written] = '\0';
+}
+
+int NormalizeStringByte(int value)
+{
+	if (value < 0)
+	{
+		return value + 256;
+	}
+
+	return value;
+}
+
+int GetUTF8SequenceLength(int value)
+{
+	if (value >= 0xc2 && value <= 0xdf)
+	{
+		return 2;
+	}
+	if (value >= 0xe0 && value <= 0xef)
+	{
+		return 3;
+	}
+	if (value >= 0xf0 && value <= 0xf4)
+	{
+		return 4;
+	}
+
+	return 0;
+}
+
+bool IsUTF8ContinuationByte(int value)
+{
+	return (value & 0xc0) == 0x80;
+}
+
+bool IsValidUTF8Sequence(const char[] input, int index, int sequenceLength)
+{
+	if (sequenceLength <= 1)
+	{
+		return false;
+	}
+
+	for (int offset = 1; offset < sequenceLength; offset++)
+	{
+		if (input[index + offset] == '\0')
+		{
+			return false;
+		}
+
+		if (!IsUTF8ContinuationByte(NormalizeStringByte(input[index + offset])))
+		{
+			return false;
+		}
+	}
+
+	int first = NormalizeStringByte(input[index]);
+	int second = NormalizeStringByte(input[index + 1]);
+	if (sequenceLength == 3)
+	{
+		return (first != 0xe0 || second >= 0xa0)
+			&& (first != 0xed || second <= 0x9f);
+	}
+	if (sequenceLength == 4)
+	{
+		return (first != 0xf0 || second >= 0x90)
+			&& (first != 0xf4 || second <= 0x8f);
+	}
+
+	return true;
 }
 
 void FormatLocalISOTime(char[] buffer, int maxLength)

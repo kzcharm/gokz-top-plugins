@@ -35,7 +35,6 @@ void GOKZTopRecords_OnPluginStart()
 	AddCommandListener(Command_Tier, "sm_tier");
 	AddCommandListener(Command_ShowPB, "sm_pb");
 	AddCommandListener(Command_ShowPB, "sm_gpb");
-	RegConsoleCmd("sm_pb", Command_ShowPBRegistered, "Show your KZCharm personal bests for the current map and mode.");
 	RegConsoleCmd("sm_gpb", Command_ShowPBRegistered, "Show your KZCharm personal bests for the current map and mode.");
 }
 
@@ -67,25 +66,27 @@ public Action Command_Tier(int client, const char[] command, int argc)
 
 public Action Command_ShowPB(int client, const char[] command, int argc)
 {
+	bool nonBlocking = StrEqual(command, "sm_pb", false);
+
 	if (!IsValidClient(client) || IsFakeClient(client))
 	{
-		return Plugin_Handled;
+		return nonBlocking ? Plugin_Continue : Plugin_Handled;
 	}
 
 	int mode = GetClientMode(client);
 	if (!IsSupportedRecordsMode(mode))
 	{
-		return Plugin_Handled;
+		return nonBlocking ? Plugin_Continue : Plugin_Handled;
 	}
 
 	RequestPB(client, mode, GOKZ_TOP_RECORD_TYPE_NUB, true);
 	RequestPB(client, mode, GOKZ_TOP_RECORD_TYPE_PRO, true);
-	return Plugin_Handled;
+	return nonBlocking ? Plugin_Continue : Plugin_Handled;
 }
 
 public Action Command_ShowPBRegistered(int client, int argc)
 {
-	return Command_ShowPB(client, "sm_pb", argc);
+	return Command_ShowPB(client, "sm_gpb", argc);
 }
 
 public void GOKZ_OnFirstSpawn(int client)

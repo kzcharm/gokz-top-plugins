@@ -7,6 +7,10 @@
 #include <gokz/kzplayer>
 #include <gokz/top>
 
+#undef REQUIRE_PLUGIN
+#include <GlobalAPI>
+#include <gokz/global>
+
 #pragma newdecls required
 #pragma semicolon 1
 
@@ -20,6 +24,7 @@
 #define GOKZ_TOP_CLAN_TAG_LENGTH 64
 #define GOKZ_TOP_TIMESTAMP_LENGTH 32
 #define GOKZ_TOP_STATUS_BODY_LENGTH 16384
+#define GOKZ_TOP_GLOBAL_STATUS_LENGTH 2048
 #define GOKZ_TOP_STATUS_PATH "/v1/servers/status"
 #define GOKZ_TOP_PUBLIC_IP_MAX_AGE 86400
 #define GOKZ_TOP_PUBLIC_IP_FAILURE_COOLDOWN 60
@@ -71,6 +76,7 @@ bool gB_PublicIPRefreshInFlight;
 #include "gokz-top-servers/cache.sp"
 #include "gokz-top-servers/public_ip.sp"
 #include "gokz-top-servers/players.sp"
+#include "gokz-top-servers/global_status.sp"
 #include "gokz-top-servers/heartbeat.sp"
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
@@ -86,11 +92,15 @@ public void OnPluginStart()
 	CreateConVars();
 	LoadPublicIPCache();
 	CreateHeartbeatTimer();
+	InitializeGlobalStatus();
 	QueueImmediateHeartbeat();
 }
 
 public void OnAllPluginsLoaded()
 {
+	RefreshGlobalStatusLibraries();
+	QueueGlobalStatusRefresh();
+
 	if (!gB_LateLoaded)
 	{
 		return;
@@ -111,6 +121,7 @@ public void OnPluginEnd()
 {
 	delete gH_HeartbeatTimer;
 	delete gH_QueuedHeartbeatTimer;
+	delete gH_GlobalRefreshTimer;
 }
 
 public void OnMapStart()
@@ -127,6 +138,17 @@ public void OnMapStart()
 	}
 
 	QueueImmediateHeartbeat();
+	QueueGlobalStatusRefresh();
+}
+
+public void OnLibraryAdded(const char[] name)
+{
+	UpdateGlobalStatusLibrary(name, true);
+}
+
+public void OnLibraryRemoved(const char[] name)
+{
+	UpdateGlobalStatusLibrary(name, false);
 }
 
 public void OnClientPostAdminCheck(int client)

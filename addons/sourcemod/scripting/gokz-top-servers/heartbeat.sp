@@ -40,6 +40,7 @@ void SendServerHeartbeat()
 	char observedAt[GOKZ_TOP_TIMESTAMP_LENGTH];
 	char hostname[GOKZ_TOP_HOSTNAME_LENGTH];
 	char encoded[GOKZ_TOP_STATUS_BODY_LENGTH];
+	char globalStatus[GOKZ_TOP_GLOBAL_STATUS_LENGTH];
 
 	FormatLocalISOTime(observedAt, sizeof(observedAt));
 	gCV_Hostname.GetString(hostname, sizeof(hostname));
@@ -50,6 +51,17 @@ void SendServerHeartbeat()
 		sizeof(encoded)))
 	{
 		LogError("[gokz-top-servers] Server heartbeat payload exceeded %d bytes", sizeof(encoded) - 1);
+		return;
+	}
+	BuildGlobalStatusJSON(globalStatus, sizeof(globalStatus));
+	if (!AppendJSONString(encoded, sizeof(encoded) - 1, ",\"global_status\":"))
+	{
+		LogError("[gokz-top-servers] Failed to append global status payload");
+		return;
+	}
+	if (!AppendJSONString(encoded, sizeof(encoded) - 1, globalStatus))
+	{
+		LogError("[gokz-top-servers] Global status payload exceeded heartbeat buffer");
 		return;
 	}
 

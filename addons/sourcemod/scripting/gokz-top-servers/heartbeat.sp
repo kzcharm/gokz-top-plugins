@@ -59,7 +59,8 @@ void SendServerHeartbeat()
 		LogError("[gokz-top-servers] Failed to append global status payload");
 		return;
 	}
-	if (!AppendJSONString(encoded, sizeof(encoded) - 1, globalStatus))
+	if (!AppendJSONString(encoded, sizeof(encoded) - 1, globalStatus)
+		|| !AppendJSONString(encoded, sizeof(encoded) - 1, "}"))
 	{
 		LogError("[gokz-top-servers] Global status payload exceeded heartbeat buffer");
 		return;
@@ -118,7 +119,7 @@ bool BuildServerHeartbeatPayload(
 		playerCount++;
 	}
 
-	if (!AppendJSONString(buffer, maxLength, "]}"))
+	if (!AppendJSONString(buffer, maxLength, "]"))
 	{
 		return false;
 	}

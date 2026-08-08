@@ -10,9 +10,6 @@ bool gB_GlobalModeAvailable[GOKZ_TOP_GLOBAL_MODE_COUNT];
 int gI_GlobalLastRefresh;
 Handle gH_GlobalRefreshTimer;
 
-static int gI_GlobalModeIds[GOKZ_TOP_GLOBAL_MODE_COUNT] = {200, 201, 202};
-static int gI_GlobalModes[GOKZ_TOP_GLOBAL_MODE_COUNT] = {Mode_KZTimer, Mode_SimpleKZ, Mode_Vanilla};
-
 void InitializeGlobalStatus()
 {
 	gI_GlobalLastRefresh = 0;
@@ -72,7 +69,7 @@ void RefreshGlobalStatus()
 	{
 		return;
 	}
-	if (!GlobalAPI_IsInit() || !GlobalAPI_HasAPIKey())
+	if (!GlobalAPI_IsInit())
 	{
 		for (int mode = 0; mode < GOKZ_TOP_GLOBAL_MODE_COUNT; mode++)
 		{
@@ -82,76 +79,33 @@ void RefreshGlobalStatus()
 		return;
 	}
 
-	char mapName[PLATFORM_MAX_PATH];
-	GetMapDisplayName(gC_CurrentMap, mapName, sizeof(mapName));
+	for (int mode = 0; mode < GOKZ_TOP_GLOBAL_MODE_COUNT; mode++)
+	{
+		gB_GlobalModeAvailable[mode] = false;
+	}
 	gB_GlobalRefreshInFlight = true;
-	if (!GlobalAPI_GetMapByName(GlobalStatus_MapCallback, _, mapName))
+	if (!GlobalAPI_GetModes(GlobalStatus_ModesCallback))
 	{
 		gB_GlobalRefreshInFlight = false;
 	}
 }
 
-public void GlobalStatus_MapCallback(JSON_Object mapJson, GlobalAPIRequestData request)
+public void GlobalStatus_ModesCallback(JSON_Object modesJson, GlobalAPIRequestData request)
 {
-	if (request.Failure || !mapJson)
+	if (request.Failure || !modesJson || !modesJson.IsArray)
 	{
 		GlobalStatus_FinishRefresh();
 		return;
 	}
 
-	APIMap map = view_as<APIMap>(mapJson);
-	int mapId = map.Id;
-	if (mapId <= 0)
+	for (int index = 0; index < modesJson.Length; index++)
 	{
-		GlobalStatus_FinishRefresh();
-		return;
-	}
-
-	int mapIds[1];
-	mapIds[0] = mapId;
-	int stages[1];
-	stages[0] = 0;
-	int tickRates[1];
-	tickRates[0] = 128;
-	if (!GlobalAPI_GetRecordFilters(
-		GlobalStatus_FiltersCallback,
-		_,
-		_,
-		_,
-		mapIds,
-		1,
-		stages,
-		1,
-		gI_GlobalModeIds,
-		GOKZ_TOP_GLOBAL_MODE_COUNT,
-		tickRates,
-		1,
-		DEFAULT_BOOL,
-		false))
-	{
-		GlobalStatus_FinishRefresh();
-	}
-}
-
-public void GlobalStatus_FiltersCallback(JSON_Object filtersJson, GlobalAPIRequestData request)
-{
-	for (int mode = 0; mode < GOKZ_TOP_GLOBAL_MODE_COUNT; mode++)
-	{
-		gB_GlobalModeAvailable[mode] = false;
-	}
-	if (!request.Failure && filtersJson && filtersJson.IsArray)
-	{
-		for (int index = 0; index < filtersJson.Length; index++)
+		APIMode mode = view_as<APIMode>(modesJson.GetObjectIndexed(index));
+		int localMode = GOKZ_GL_FromGlobalMode(view_as<GlobalMode>(mode.Id));
+		if (localMode >= Mode_Vanilla && localMode <= Mode_KZTimer
+			&& mode.LatestVersion <= GOKZ_GetModeVersion(localMode))
 		{
-			APIIterable filters = view_as<APIIterable>(filtersJson);
-			APIRecordFilter filter = view_as<APIRecordFilter>(filters.GetById(index));
-			for (int mode = 0; mode < GOKZ_TOP_GLOBAL_MODE_COUNT; mode++)
-			{
-				if (filter.ModeId == gI_GlobalModeIds[mode] && GOKZ_GetModeLoaded(gI_GlobalModes[mode]))
-				{
-					gB_GlobalModeAvailable[mode] = true;
-				}
-			}
+			gB_GlobalModeAvailable[localMode] = true;
 		}
 	}
 	GlobalStatus_FinishRefresh();

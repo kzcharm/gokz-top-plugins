@@ -3,6 +3,11 @@
 #include <SteamWorks>
 
 #include <gokz/core>
+
+#define REQUIRE_PLUGIN
+#include <gokz/top>
+#undef REQUIRE_PLUGIN
+
 #include <gokz/jumpstats>
 #include <gokz/replays>
 

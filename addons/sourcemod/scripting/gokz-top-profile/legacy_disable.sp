@@ -18,7 +18,10 @@ bool IsLegacyProfileSurfaceOccupied()
 
 void DisableLegacyProfileBinary()
 {
-	UnloadLegacyProfilePlugin();
+	if (IsLegacyProfileSurfaceOccupied())
+	{
+		UnloadLegacyProfilePlugin();
+	}
 
 	if (!FileExists(LEGACY_PROFILE_PLUGIN))
 	{

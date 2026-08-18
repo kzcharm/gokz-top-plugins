@@ -95,12 +95,20 @@ public void OnPluginStart()
 	DisableLegacyProfileBinary();
 	if (gB_LegacySurfaceDeferred)
 	{
-		ServerCommand("sm plugins reload gokz-top-profile");
+		// The legacy plugin unload is deferred by SourceMod. Reload only after
+		// that unload has completed so AskPluginLoad2 sees a clean API surface.
+		CreateTimer(0.1, Timer_ReloadAfterLegacyUnload, _, TIMER_FLAG_NO_MAPCHANGE);
 		return;
 	}
 
 	RegisterCommands();
 	OnPluginStart_Scoreboard();
+}
+
+public Action Timer_ReloadAfterLegacyUnload(Handle timer)
+{
+	ServerCommand("sm plugins reload gokz-top-profile");
+	return Plugin_Stop;
 }
 
 public void OnAllPluginsLoaded()

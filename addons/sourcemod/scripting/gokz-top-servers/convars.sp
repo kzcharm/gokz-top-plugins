@@ -6,8 +6,9 @@ void FindRequiredConVars()
 
 void CreateConVars()
 {
-	AutoExecConfig_SetFile("gokz-top-servers", GOKZ_TOP_CFG_FOLDER);
+	AutoExecConfig_SetCreateDirectory(true);
 	AutoExecConfig_SetCreateFile(true);
+	AutoExecConfig_SetFile("gokz-top-servers", GOKZ_TOP_CFG_FOLDER);
 
 	gCV_PushInterval = AutoExecConfig_CreateConVar("gokz_top_servers_push_interval", "4.0",
 		"Interval in seconds between gokz-top server status heartbeats.", _, true, 2.0, true, 10.0);

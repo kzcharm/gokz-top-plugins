@@ -1,0 +1,35 @@
+"Games"
+{
+	"#default"
+	{
+		"Addresses"
+		{
+			"host_framestarttime_stddeviation"
+			{
+				"linux"
+				{
+					"signature" "CServerRemoteAccess::GetStatsString"
+					"read" "71"
+				}
+			}
+
+			"host_frameendtime_computationduration"
+			{
+				"linux"
+				{
+					"signature" "CServerRemoteAccess::GetStatsString"
+					"read" "95"
+				}
+			}
+		}
+
+		"Signatures"
+		{
+			"CServerRemoteAccess::GetStatsString"
+			{
+				"library" "engine"
+				"linux" "\x55\x31\xC0\x89\xE5\x57\x56\x53\x81\xEC\x2A\x2A\x2A\x2A\x89\x45\xE0\x89\x45\xE4\x8D\x45\xE4\x8B\x5D\x0C"
+			}
+		}
+	}
+}

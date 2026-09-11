@@ -39,3 +39,14 @@ Reload the API key or restart the server:
 ```cfg
 gokz_top_reload_api_key
 ```
+
+## Live Server Telemetry
+
+`gokz-top-servers` publishes live map and player state to GOKZ.TOP. Version
+0.2.0 adds each player's average round-trip ping and the CS:GO server's
+net-graph-style `SV` and `VAR` frame metrics.
+
+`SV` and `VAR` require the bundled `gokz-top-sv-var.games.txt` gamedata to
+match the server engine. If those addresses are unavailable, the plugin logs
+the problem once and continues publishing all other heartbeat fields,
+including player ping. Older plugin versions remain supported by the website.

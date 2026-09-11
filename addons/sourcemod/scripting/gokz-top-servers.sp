@@ -14,7 +14,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define GOKZ_TOP_SERVERS_VERSION "0.1.0"
+#define GOKZ_TOP_SERVERS_VERSION "0.2.0"
 #define GOKZ_TOP_CFG_FOLDER "sourcemod/gokz-top"
 #define GOKZ_TOP_SERVERS_CACHE_PATH "data/gokz-top/public_ip_cache.json"
 #define GOKZ_TOP_SERVERS_CACHE_DIR "data/gokz-top"
@@ -76,6 +76,7 @@ bool gB_PublicIPRefreshInFlight;
 #include "gokz-top-servers/cache.sp"
 #include "gokz-top-servers/public_ip.sp"
 #include "gokz-top-servers/players.sp"
+#include "gokz-top-servers/performance.sp"
 #include "gokz-top-servers/global_status.sp"
 #include "gokz-top-servers/heartbeat.sp"
 
@@ -91,6 +92,7 @@ public void OnPluginStart()
 	FindRequiredConVars();
 	CreateConVars();
 	LoadPublicIPCache();
+	InitializeServerPerformance();
 	CreateHeartbeatTimer();
 	InitializeGlobalStatus();
 	QueueImmediateHeartbeat();

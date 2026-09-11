@@ -41,6 +41,7 @@ void SendServerHeartbeat()
 	char hostname[GOKZ_TOP_HOSTNAME_LENGTH];
 	char encoded[GOKZ_TOP_STATUS_BODY_LENGTH];
 	char globalStatus[GOKZ_TOP_GLOBAL_STATUS_LENGTH];
+	char serverPerformance[96];
 
 	FormatLocalISOTime(observedAt, sizeof(observedAt));
 	gCV_Hostname.GetString(hostname, sizeof(hostname));
@@ -54,6 +55,12 @@ void SendServerHeartbeat()
 		return;
 	}
 	BuildGlobalStatusJSON(globalStatus, sizeof(globalStatus));
+	BuildServerPerformanceJSON(serverPerformance, sizeof(serverPerformance));
+	if (!AppendJSONString(encoded, sizeof(encoded) - 1, serverPerformance))
+	{
+		LogError("[gokz-top-servers] Failed to append server performance payload");
+		return;
+	}
 	if (!AppendJSONString(encoded, sizeof(encoded) - 1, ",\"global_status\":"))
 	{
 		LogError("[gokz-top-servers] Failed to append global status payload");
@@ -142,6 +149,7 @@ bool BuildPlayerHeartbeatJSON(int client, char[] buffer, int maxLength)
 	char tagValue[(GOKZ_TOP_CLAN_TAG_LENGTH * 6) + 4];
 	char timerValue[32];
 	char stageValue[16];
+	char pingValue[16];
 
 	GetClientName(client, name, sizeof(name));
 	GetClientAuthId(client, AuthId_SteamID64, steamid64, sizeof(steamid64), true);
@@ -183,8 +191,18 @@ bool BuildPlayerHeartbeatJSON(int client, char[] buffer, int maxLength)
 		strcopy(stageValue, sizeof(stageValue), "null");
 	}
 
+	float pingSeconds = GetClientAvgLatency(client, NetFlow_Both);
+	if (pingSeconds >= 0.0)
+	{
+		Format(pingValue, sizeof(pingValue), "%d", RoundToNearest(pingSeconds * 1000.0));
+	}
+	else
+	{
+		strcopy(pingValue, sizeof(pingValue), "null");
+	}
+
 	Format(buffer, maxLength,
-		"{\"tag\":%s,\"mode\":\"%s\",\"name\":\"%s\",\"score\":%d,\"status\":\"%s\",\"duration_seconds\":%.3f,\"is_paused\":%s,\"steamid64\":\"%s\",\"teleports\":%d,\"timer_time\":%s,\"stage\":%s}",
+		"{\"tag\":%s,\"mode\":\"%s\",\"name\":\"%s\",\"score\":%d,\"status\":\"%s\",\"duration_seconds\":%.3f,\"is_paused\":%s,\"steamid64\":\"%s\",\"teleports\":%d,\"timer_time\":%s,\"stage\":%s,\"ping_ms\":%s}",
 		tagValue,
 		escapedMode,
 		escapedName,
@@ -195,9 +213,23 @@ bool BuildPlayerHeartbeatJSON(int client, char[] buffer, int maxLength)
 		escapedSteamID64,
 		GetPlayerTeleports(client),
 		timerValue,
-		stageValue);
+		stageValue,
+		pingValue);
 
 	return strlen(buffer) < maxLength - 1;
+}
+
+void BuildServerPerformanceJSON(char[] buffer, int maxLength)
+{
+	float svMs;
+	float varMs;
+	if (!TryGetServerPerformance(svMs, varMs))
+	{
+		strcopy(buffer, maxLength, ",\"sv_ms\":null,\"var_ms\":null");
+		return;
+	}
+
+	Format(buffer, maxLength, ",\"sv_ms\":%.3f,\"var_ms\":%.3f", svMs, varMs);
 }
 
 bool AppendJSONString(char[] buffer, int maxLength, const char[] suffix)

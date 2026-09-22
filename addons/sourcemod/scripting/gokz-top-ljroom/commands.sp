@@ -18,6 +18,13 @@ public Action Command_LJ(int client, int args)
 		GOKZ_PrintToChat(client, true, "%t", "LJ Room - Must Be Alive");
 		return Plugin_Handled;
 	}
+	if (GOKZ_GetCoreOption(client, Option_Safeguard) > Safeguard_Disabled
+		&& GOKZ_GetTimerRunning(client) && GOKZ_GetValidTimer(client))
+	{
+		GOKZ_PrintToChat(client, true, "%t", "LJ Room - Safeguard Blocked");
+		GOKZ_PlayErrorSound(client);
+		return Plugin_Handled;
+	}
 
 	int requestedDistance = GetDefaultDistance(client);
 	if (args > 1)
@@ -65,13 +72,17 @@ public Action Command_LJ(int client, int args)
 	angles[0] = view_as<float>(spot[Spot_Pitch]);
 	angles[1] = view_as<float>(spot[Spot_Yaw]);
 	angles[2] = 0.0;
-	float velocity[3] = {0.0, 0.0, 0.0};
-
 	if (GOKZ_GetTimerRunning(client))
 	{
-		GOKZ_StopTimer(client, true);
+		if (!GOKZ_StopTimer(client, true) || GOKZ_GetTimerRunning(client))
+		{
+			GOKZ_PrintToChat(client, true, "%t", "LJ Room - Timer Stop Failed");
+			GOKZ_PlayErrorSound(client);
+			return Plugin_Handled;
+		}
+		GOKZ_PrintToChat(client, true, "%t", "LJ Room - Timer Stopped");
 	}
-	TeleportEntity(client, origin, angles, velocity);
+	TeleportPlayer(client, origin, angles);
 
 	int actualDistance = spot[Spot_Distance];
 	if (actualDistance == requestedDistance)

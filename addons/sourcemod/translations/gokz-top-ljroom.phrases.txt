@@ -18,6 +18,24 @@
 		"ru"		"{grey}Для телепортации на LJ-блок вы должны быть живы."
 		"chi"		"{grey}你必须存活才能传送到 LJ 方块。"
 	}
+	"LJ Room - Safeguard Blocked"
+	{
+		"en"		"{darkred}Safeguard is enabled. Stop your valid run before teleporting to an LJ block."
+		"ru"		"{darkred}Защита включена. Остановите действительный забег перед телепортацией на LJ-блок."
+		"chi"		"{darkred}保护模式已启用。请先停止有效计时，再传送到 LJ 方块。"
+	}
+	"LJ Room - Timer Stopped"
+	{
+		"en"		"{grey}Your timer was stopped before teleporting."
+		"ru"		"{grey}Таймер остановлен перед телепортацией."
+		"chi"		"{grey}传送前已停止计时。"
+	}
+	"LJ Room - Timer Stop Failed"
+	{
+		"en"		"{darkred}Could not stop your timer. Teleport cancelled."
+		"ru"		"{darkred}Не удалось остановить таймер. Телепортация отменена."
+		"chi"		"{darkred}无法停止计时，传送已取消。"
+	}
 	"LJ Room - Usage"
 	{
 		"en"		"{grey}Usage: {green}!lj [distance]"

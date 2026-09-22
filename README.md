@@ -64,5 +64,7 @@ GOKZ.TOP when the map starts. It uses the API base URL configured by
 - `sm_ljreload` or `sm_reloadlj` refreshes the current map's data and requires
   root admin access when run by a player.
 
-The plugin stops a running timer before teleporting. Maps without detected
-rooms return an empty result and remain playable normally.
+Like GOKZ's `!goto`, the command blocks teleporting during a valid run when
+the player's safeguard is enabled. Otherwise it stops a running timer before
+teleporting. Maps without detected rooms return an empty result and remain
+playable normally.

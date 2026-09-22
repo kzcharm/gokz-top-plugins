@@ -1,0 +1,73 @@
+"Phrases"
+{
+	"LJ Room - Data Unavailable"
+	{
+		"en"		"{grey}LJ room data is unavailable. Please try again later."
+		"ru"		"{grey}Данные LJ-комнаты недоступны. Повторите попытку позже."
+		"chi"		"{grey}LJ 房间数据不可用，请稍后再试。"
+	}
+	"LJ Room - Data Loading"
+	{
+		"en"		"{grey}LJ room data is still loading."
+		"ru"		"{grey}Данные LJ-комнаты ещё загружаются."
+		"chi"		"{grey}LJ 房间数据仍在加载。"
+	}
+	"LJ Room - Must Be Alive"
+	{
+		"en"		"{grey}You must be alive to teleport to an LJ block."
+		"ru"		"{grey}Для телепортации на LJ-блок вы должны быть живы."
+		"chi"		"{grey}你必须存活才能传送到 LJ 方块。"
+	}
+	"LJ Room - Usage"
+	{
+		"en"		"{grey}Usage: {green}!lj [distance]"
+		"ru"		"{grey}Использование: {green}!lj [дистанция]"
+		"chi"		"{grey}用法：{green}!lj [距离]"
+	}
+	"LJ Room - Default Usage"
+	{
+		"en"		"{grey}Usage: {green}!ljdefault <distance>"
+		"ru"		"{grey}Использование: {green}!ljdefault <дистанция>"
+		"chi"		"{grey}用法：{green}!ljdefault <距离>"
+	}
+	"LJ Room - Preferences Loading"
+	{
+		"en"		"{grey}Your preferences are still loading. Please try again."
+		"ru"		"{grey}Ваши настройки ещё загружаются. Повторите попытку."
+		"chi"		"{grey}你的偏好设置仍在加载，请重试。"
+	}
+	"LJ Room - Default Current"
+	{
+		"#format"	"{1:d}"
+		"en"		"{grey}Your default LJ block distance is {green}{1}{grey}."
+		"ru"		"{grey}Дистанция LJ-блока по умолчанию: {green}{1}{grey}."
+		"chi"		"{grey}你的默认 LJ 方块距离为 {green}{1}{grey}。"
+	}
+	"LJ Room - Default Set"
+	{
+		"#format"	"{1:d}"
+		"en"		"{grey}Your default LJ block distance is now {green}{1}{grey}."
+		"ru"		"{grey}Дистанция LJ-блока по умолчанию теперь {green}{1}{grey}."
+		"chi"		"{grey}你的默认 LJ 方块距离现已设为 {green}{1}{grey}。"
+	}
+	"LJ Room - Not Detected"
+	{
+		"en"		"{grey}No LJ room was detected for this map."
+		"ru"		"{grey}На этой карте LJ-комната не обнаружена."
+		"chi"		"{grey}未在此地图中检测到 LJ 房间。"
+	}
+	"LJ Room - Exact Teleport"
+	{
+		"#format"	"{1:d}"
+		"en"		"{grey}Teleported to the {green}{1}{grey} block."
+		"ru"		"{grey}Телепортация на блок {green}{1}{grey}."
+		"chi"		"{grey}已传送到 {green}{1}{grey} 方块。"
+	}
+	"LJ Room - Nearest Teleport"
+	{
+		"#format"	"{1:d},{2:d}"
+		"en"		"{grey}No {green}{1}{grey} block was detected; teleported to the nearest block: {green}{2}{grey}."
+		"ru"		"{grey}Блок {green}{1}{grey} не найден; телепортация на ближайший блок: {green}{2}{grey}."
+		"chi"		"{grey}未检测到 {green}{1}{grey} 方块；已传送到最近的方块：{green}{2}{grey}。"
+	}
+}

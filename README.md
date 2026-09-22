@@ -50,3 +50,19 @@ net-graph-style `SV` and `VAR` frame metrics.
 match the server engine. If those addresses are unavailable, the plugin logs
 the problem once and continues publishing all other heartbeat fields,
 including player ping. Older plugin versions remain supported by the website.
+
+## Detected LJ Rooms
+
+`gokz-top-ljroom` downloads the current map's detected long-jump rooms from
+GOKZ.TOP when the map starts. It uses the API base URL configured by
+`gokz-top-core`; the LJ-room read endpoint does not require an API key.
+
+- `!lj [distance]` or `!ljroom [distance]` teleports to the exact or nearest
+  detected block. The default distance is 260.
+- `!ljdefault <distance>` saves a player's preferred distance; omit the value
+  to display the current preference.
+- `sm_ljreload` or `sm_reloadlj` refreshes the current map's data and requires
+  root admin access when run by a player.
+
+The plugin stops a running timer before teleporting. Maps without detected
+rooms return an empty result and remain playable normally.

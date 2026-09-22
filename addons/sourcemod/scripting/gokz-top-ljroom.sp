@@ -9,6 +9,7 @@
 
 #pragma newdecls required
 #pragma semicolon 1
+#pragma dynamic 524288
 
 #define LJROOM_DEFAULT_DISTANCE 260
 #define LJROOM_MAX_RESPONSE_LENGTH 65536

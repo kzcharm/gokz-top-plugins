@@ -1,9 +1,20 @@
-void BeginMapLoad()
+void ClearMapLoad()
 {
 	gI_LoadGeneration++;
 	gB_DataReady = false;
-	gB_DataLoading = true;
+	gB_DataLoading = false;
 	gA_Spots.Clear();
+}
+
+void BeginMapLoad()
+{
+	ClearMapLoad();
+	if (gCV_APIBaseURL == null || gCV_RequestTimeout == null)
+	{
+		LogError("[gokz-top-ljroom] event=core_convars_unavailable");
+		return;
+	}
+	gB_DataLoading = true;
 
 	GetCurrentMap(gC_CurrentMap, sizeof(gC_CurrentMap));
 	NormalizeMapName(gC_CurrentMap, sizeof(gC_CurrentMap));

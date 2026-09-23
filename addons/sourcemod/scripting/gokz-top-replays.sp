@@ -46,16 +46,16 @@ ConVar gCV_APIKey;
 ConVar gCV_RequestTimeout;
 ConVar gCV_Debug;
 
-public void OnPluginStart()
+public void OnAllPluginsLoaded()
 {
 	gCV_APIBaseURL = FindConVar("gokz_top_api_base_url");
 	gCV_APIKey = FindConVar("gokz_top_api_key");
 	gCV_RequestTimeout = FindConVar("gokz_top_request_timeout");
 	gCV_Debug = FindConVar("gokz_top_debug");
 
-	if (gCV_APIBaseURL == null || gCV_APIKey == null)
+	if (gCV_APIBaseURL == null || gCV_APIKey == null || gCV_RequestTimeout == null || gCV_Debug == null)
 	{
-		SetFailState("gokz-top-core is required before gokz-top-replays");
+		SetFailState("gokz-top-core shared HTTP ConVars are unavailable");
 	}
 }
 

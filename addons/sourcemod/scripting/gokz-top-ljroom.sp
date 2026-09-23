@@ -5,7 +5,10 @@
 #include <json>
 
 #include <gokz/core>
+
+#define REQUIRE_PLUGIN
 #include <gokz/top>
+#undef REQUIRE_PLUGIN
 
 #pragma newdecls required
 #pragma semicolon 1
@@ -42,7 +45,6 @@ ArrayList gA_Spots;
 Cookie gC_DefaultDistance;
 bool gB_DataReady;
 bool gB_DataLoading;
-bool gB_LateLoad;
 int gI_LoadGeneration;
 char gC_CurrentMap[PLATFORM_MAX_PATH];
 char gC_ResponseBuffer[LJROOM_MAX_RESPONSE_LENGTH];
@@ -50,12 +52,6 @@ char gC_ResponseBuffer[LJROOM_MAX_RESPONSE_LENGTH];
 #include "gokz-top-ljroom/parse.sp"
 #include "gokz-top-ljroom/http.sp"
 #include "gokz-top-ljroom/commands.sp"
-
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
-{
-	gB_LateLoad = late;
-	return APLRes_Success;
-}
 
 public void OnPluginStart()
 {
@@ -68,18 +64,16 @@ public void OnPluginStart()
 		"Preferred LJ block distance used by !lj",
 		CookieAccess_Private
 	);
+	RegisterCommands();
+}
+
+public void OnAllPluginsLoaded()
+{
 	gCV_APIBaseURL = FindConVar("gokz_top_api_base_url");
 	gCV_RequestTimeout = FindConVar("gokz_top_request_timeout");
 	if (gCV_APIBaseURL == null || gCV_RequestTimeout == null)
 	{
 		SetFailState("gokz-top-core shared HTTP ConVars are unavailable");
-		return;
-	}
-
-	RegisterCommands();
-	if (gB_LateLoad)
-	{
-		BeginMapLoad();
 	}
 }
 
@@ -90,6 +84,11 @@ public void OnPluginEnd()
 }
 
 public void OnMapStart()
+{
+	ClearMapLoad();
+}
+
+public void OnConfigsExecuted()
 {
 	BeginMapLoad();
 }

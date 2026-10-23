@@ -1,3 +1,5 @@
+#define CheckMark(%1) ((%1) ? "{green}✓" : "{darkred}X")
+
 public Action Command_Queue(int client, int args)
 {
 	if (args > 0)
@@ -45,21 +47,32 @@ public Action Command_Check(int client, int args)
 {
 	if (client <= 0) return Command_Queue(client, args);
 	JSON_Object body = Capture_Check(client, GOKZ_GetCourse(client));
-	if (body == null) return Plugin_Handled;
+	if (body == null)
+	{
+		PrintCheckUnavailable(client);
+		return Plugin_Handled;
+	}
 	char payload[4096], environment[512], key[256], url[768];
 	json_encode(body, payload, sizeof(payload)); body.Cleanup(); delete body;
 	GOKZTop_GetHTTPConfig(environment, sizeof(environment), key, sizeof(key));
-	ReplyToCommand(client, "[gokz.top] Fresh map: %s. Last upload: %s", gFreshMap ? "yes" : "no", gLastStatus);
-	Command_Queue(client, 0);
+	GOKZ_PrintToChat(client, false, "{purple}GOKZ.TOP {grey}| Records Availability Check");
 	Format(url, sizeof(url), "%s/v1/records/check", environment);
 	Handle request = SteamWorks_CreateHTTPRequest(k_EHTTPMethodPOST, url);
-	if (request == null) return Plugin_Handled;
+	if (request == null)
+	{
+		PrintCheckUnavailable(client);
+		return Plugin_Handled;
+	}
 	SteamWorks_SetHTTPRequestHeaderValue(request, "X-Server-Group-Key", key);
 	SteamWorks_SetHTTPRequestRawPostBody(request, "application/json", payload, strlen(payload));
 	SteamWorks_SetHTTPRequestContextValue(request, GetClientSerial(client));
 	SteamWorks_SetHTTPCallbacks(request, OnCheckComplete);
 	SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(request, 10000);
-	if (!SteamWorks_SendHTTPRequest(request)) delete request;
+	if (!SteamWorks_SendHTTPRequest(request))
+	{
+		delete request;
+		PrintCheckUnavailable(client);
+	}
 	return Plugin_Handled;
 }
 
@@ -70,8 +83,29 @@ public void OnCheckComplete(Handle request, bool failure, bool successful, EHTTP
 	{
 		char response[4096];
 		HTTP_ReadBody(request, response, sizeof(response));
-		PrintToConsole(client, "[gokz.top] HTTP %d: %s", statusCode, response);
-		PrintToChat(client, "[gokz.top] Eligibility check: HTTP %d. See console for individual checks.", statusCode);
+		PrintToConsole(client, "GOKZ.TOP | HTTP %d: %s", statusCode, response);
+		JSON_Object body = json_decode(response);
+		JSON_Object checks = body != null ? body.GetObject("checks") : null;
+		if (!failure && successful && statusCode == k_EHTTPStatusCode200OK && checks != null)
+		{
+			GOKZ_PrintToChat(client, false, "{purple}GOKZ.TOP {grey}| API Key %s {grey}| Server %s {grey}| Group %s",
+				CheckMark(checks.GetBool("authentication")), CheckMark(checks.GetBool("server")), CheckMark(checks.GetBool("group")));
+			GOKZ_PrintToChat(client, false, "{purple}GOKZ.TOP {grey}| Map %s {grey}| Course %s {grey}| Filter %s {grey}| You %s",
+				CheckMark(checks.GetBool("map")), CheckMark(checks.GetBool("course")), CheckMark(checks.GetBool("filter")), CheckMark(checks.GetBool("player")));
+		}
+		else PrintCheckUnavailable(client);
+		if (body != null) body.Cleanup();
+		delete body;
+		DBResultSet queue = SQL_Query(gDB, "SELECT count(*) FROM jobs WHERE state NOT IN ('done','rejected')");
+		int pending;
+		if (queue != null && queue.FetchRow()) pending = queue.FetchInt(0);
+		delete queue;
+		GOKZ_PrintToChat(client, false, "{purple}GOKZ.TOP {grey}| Queued: {purple}%d {grey}| Details in console", pending);
 	}
 	delete request;
+}
+
+static void PrintCheckUnavailable(int client)
+{
+	GOKZ_PrintToChat(client, false, "{purple}GOKZ.TOP {grey}| API {darkred}X {grey}| Eligibility unavailable. Details in console.");
 }

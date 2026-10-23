@@ -75,16 +75,22 @@ playable normally.
 It requires the updated `gokz-top-core` providing `GOKZTop_GetHTTPConfig`,
 MovementAPI, GOKZ Anti-Cheat, and a fresh map after a late load or reload.
 
-Set `gokz_top_records_server_id` in
-`cfg/sourcemod/gokz-top/gokz-top-records.cfg` to the native server UUID shown
-on the same GOKZ.TOP API instance configured by core. The server must belong
-to the API key's group. Use `!tc` or `!topcheck` to inspect individual
+Configure the server-group API key and run `gokz-top-servers` alongside records.
+Its authenticated server SteamID64 heartbeat registers the instance automatically
+on the API instance configured by core. The API preserves the existing native
+server UUID when adopting the same endpoint in the same group. No manual server
+UUID is needed for new runs. Steam authentication must be available (`sv_lan 0`);
+records wait for a valid server SteamID. Use `!tc` or `!topcheck` to inspect
 eligibility checks; `!gc` remains the separate GlobalAPI check.
+
+`gokz_top_records_server_id` is deprecated and only selects legacy UUID-based
+jobs for draining. Keep its old value only while such jobs remain pending;
+clear it after they complete. It does not select the identity for new runs.
 
 Completed runs and eligible replay uploads use the private SQLite queue
 `addons/sourcemod/data/sqlite/gokz-top-records.sq3` and replay spool
 `addons/sourcemod/data/gokz-top-records/`. Jobs retain their original API URL
-and server UUID across reloads and restarts. Keep these files when recovering
+and server identity across reloads and restarts. Keep these files when recovering
 from an outage. Changing the configured API or server does not redirect old jobs.
 
 Root admins can inspect `sm_toprecords_queue [UUID]` and retry retained

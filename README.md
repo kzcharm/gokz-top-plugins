@@ -68,3 +68,26 @@ Like GOKZ's `!goto`, the command blocks teleporting during a valid run when
 the player's safeguard is enabled. Otherwise it stops a running timer before
 teleporting. Maps without detected rooms return an empty result and remain
 playable normally.
+
+## Direct Records
+
+`gokz-top-records` captures native GOKZ finishes independently of GlobalAPI.
+It requires the updated `gokz-top-core` providing `GOKZTop_GetHTTPConfig`,
+MovementAPI, GOKZ Anti-Cheat, and a fresh map after a late load or reload.
+
+Set `gokz_top_records_server_id` in
+`cfg/sourcemod/gokz-top/gokz-top-records.cfg` to the native server UUID shown
+on the same GOKZ.TOP API instance configured by core. The server must belong
+to the API key's group. Use `!tc` or `!topcheck` to inspect individual
+eligibility checks; `!gc` remains the separate GlobalAPI check.
+
+Completed runs and eligible replay uploads use the private SQLite queue
+`addons/sourcemod/data/sqlite/gokz-top-records.sq3` and replay spool
+`addons/sourcemod/data/gokz-top-records/`. Jobs retain their original API URL
+and server UUID across reloads and restarts. Keep these files when recovering
+from an outage. Changing the configured API or server does not redirect old jobs.
+
+Root admins can inspect `sm_toprecords_queue [UUID]` and retry retained
+authentication or rejected jobs with `sm_toprecords_retry`. Review the recorded
+error before retrying. A completed record can be accepted without qualifying
+for a replay upload.

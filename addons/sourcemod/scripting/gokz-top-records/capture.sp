@@ -24,7 +24,7 @@ JSON_Object Capture_Check(int client, int course)
 	char map[PLATFORM_MAX_PATH], bsp[PLATFORM_MAX_PATH], steam[32], server[37];
 	GetCurrentMap(map, sizeof(map));
 	Format(bsp, sizeof(bsp), "maps/%s.bsp", map);
-	GetClientAuthId(client, AuthId_SteamID64, steam, sizeof(steam));
+	if (!Capture_GetSteamID64(client, steam, sizeof(steam))) return null;
 	gCV_Server.GetString(server, sizeof(server));
 	int mode = GOKZ_GetCoreOption(client, Option_Mode);
 	if (mode < 0 || mode > 3) return null;
@@ -50,6 +50,51 @@ JSON_Object Capture_Check(int client, int course)
 	return body;
 }
 
+// Older Source 1 builds can expose Steam2 while the SteamID64 native fails.
+// Add the authenticated account ID as decimal digits to avoid 32-bit overflow.
+bool Capture_GetSteamID64(int client, char[] steam, int capacity)
+{
+	if (GetClientAuthId(client, AuthId_SteamID64, steam, capacity) && strlen(steam) == 17)
+	{
+		bool numeric = true;
+		for (int i = 0; i < 17; i++) if (steam[i] < '0' || steam[i] > '9') numeric = false;
+		if (numeric) return true;
+	}
+	char steam2[32];
+	if (!GetClientAuthId(client, AuthId_Steam2, steam2, sizeof(steam2)))
+	{
+		steam[0] = '\0';
+		return false;
+	}
+	return Capture_Steam2ToSteam64(steam2, steam, capacity);
+}
+
+bool Capture_Steam2ToSteam64(const char[] steam2, char[] steam, int capacity)
+{
+	char parts[3][24];
+	steam[0] = '\0';
+	int separators;
+	for (int i = 0; steam2[i]; i++) if (steam2[i] == ':') separators++;
+	if (separators != 2) return false;
+	if (capacity < 18 || ExplodeString(steam2, ":", parts, sizeof(parts), sizeof(parts[])) != 3
+		|| (!StrEqual(parts[0], "STEAM_0") && !StrEqual(parts[0], "STEAM_1"))
+		|| (!StrEqual(parts[1], "0") && !StrEqual(parts[1], "1"))
+		|| strlen(parts[2]) == 0 || strlen(parts[2]) > 10) return false;
+	for (int i = 0; parts[2][i]; i++) if (parts[2][i] < '0' || parts[2][i] > '9') return false;
+	if (strlen(parts[2]) == 10 && strcmp(parts[2], "2147483647") > 0) return false;
+	strcopy(steam, capacity, "76561197960265728");
+	int carry = StringToInt(parts[1]);
+	int accountDigit = strlen(parts[2]) - 1;
+	for (int i = 16; i >= 0; i--)
+	{
+		int sum = steam[i] - '0' + carry;
+		if (accountDigit >= 0) sum += 2 * (parts[2][accountDigit--] - '0');
+		steam[i] = '0' + sum % 10;
+		carry = sum / 10;
+	}
+	return carry == 0;
+}
+
 public void GOKZ_OnTimerEnd_Post(int client, int course, float time, int teleportsUsed)
 {
 	if (!gRun[client]) return;
@@ -58,7 +103,8 @@ public void GOKZ_OnTimerEnd_Post(int client, int course, float time, int telepor
 	char timestamp[40], timeString[32], payload[4096], steam2[32];
 	GetClientAuthId(client, AuthId_Steam2, steam2, sizeof(steam2));
 	FormatTime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S%z", GetTime());
-	Format(timeString, sizeof(timeString), "%.3f", time);
+	int timeMS = RoundToNearest(time * 1000.0);
+	Format(timeString, sizeof(timeString), "%d.%03d", timeMS / 1000, timeMS % 1000);
 	body.SetString("time", timeString);
 	body.SetString("finished_at", timestamp);
 	body.SetInt("teleports", teleportsUsed);

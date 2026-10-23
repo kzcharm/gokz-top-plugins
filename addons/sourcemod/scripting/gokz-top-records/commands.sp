@@ -92,6 +92,8 @@ public void OnCheckComplete(Handle request, bool failure, bool successful, EHTTP
 				CheckMark(checks.GetBool("authentication")), CheckMark(checks.GetBool("server")), CheckMark(checks.GetBool("group")));
 			GOKZ_PrintToChat(client, false, "{purple}GOKZ.TOP {grey}| Map %s {grey}| Course %s {grey}| Filter %s {grey}| You %s",
 				CheckMark(checks.GetBool("map")), CheckMark(checks.GetBool("course")), CheckMark(checks.GetBool("filter")), CheckMark(checks.GetBool("player")));
+			GOKZ_PrintToChat(client, false, "{purple}GOKZ.TOP {grey}| Mode %s {grey}| Integrity %s {grey}| API {green}✓",
+				CheckMark(checks.GetBool("mode")), CheckMark(checks.GetBool("integrity")));
 		}
 		else PrintCheckUnavailable(client);
 		if (body != null) body.Cleanup();

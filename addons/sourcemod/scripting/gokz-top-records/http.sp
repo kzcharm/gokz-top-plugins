@@ -99,7 +99,7 @@ public void OnRecordHTTPComplete(Handle request, bool failure, bool successful, 
 				if (IsRecordUUID(canonical))
 				{
 					Format(query, sizeof(query), "UPDATE jobs SET canonical='%s',state='accepted',attempts=0,next=0,eligible=%d,error='' WHERE id='%s'", canonical, body.GetBool("replay_eligible") ? 1 : 0, id);
-					Queue_SQL(query);
+					if (Queue_SQL(query)) Call_OnRecordAccepted(id, canonical);
 				}
 			}
 			else if (StrEqual(state, "reconcile"))

@@ -26,6 +26,7 @@ public Plugin myinfo =
 };
 
 Database gDB;
+GlobalForward gH_OnRecordAccepted;
 ConVar gCV_Server, gCV_Spool;
 bool gFreshMap, gLateMap, gBusy, gRun[MAXPLAYERS + 1], gValid[MAXPLAYERS + 1];
 int gMode[MAXPLAYERS + 1], gVersion[MAXPLAYERS + 1];
@@ -37,6 +38,7 @@ char gModeNames[][] = {"VNL", "SKZ", "KZT", "NKZ"};
 #include "gokz-top-records/queue.sp"
 #include "gokz-top-records/capture.sp"
 #include "gokz-top-records/http.sp"
+#include "gokz-top-records/forwards.sp"
 #include "gokz-top-records/replays.sp"
 #include "gokz-top-records/reconciliation.sp"
 #include "gokz-top-records/commands.sp"
@@ -52,6 +54,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 
 public void OnPluginStart()
 {
+	gH_OnRecordAccepted = new GlobalForward("GOKZTop_OnRecordAccepted", ET_Ignore, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_String);
 	gCV_Server = CreateConVar("gokz_top_records_server_id", "", "Deprecated: previous server UUID, used only to drain legacy queued jobs. New runs use the authenticated server SteamID.");
 	gCV_Spool = CreateConVar("gokz_top_records_spool_gib", "10", "Maximum private replay spool size in GiB.", _, true, 0.0);
 	AutoExecConfig(true, "gokz-top-records", "sourcemod/gokz-top");

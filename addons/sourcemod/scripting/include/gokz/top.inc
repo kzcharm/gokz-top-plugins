@@ -157,3 +157,13 @@ stock bool GOKZTop_GetServerSteamID(char[] buffer, int maxLength)
 
 /** Optional records-plugin heartbeat evidence; JSON buffer, false if unavailable. */
 native bool GOKZTop_GetRecordsStatus(char[] buffer, int maxLength);
+
+/**
+ * Called by gokz-top-records after a durably queued finish is accepted by the API.
+ * The record and its PB metadata are committed before this notification. This may
+ * arrive long after the finish, after reconnects, or after a lost acknowledgement.
+ * Consumers must match the API environment, player and map; it is not a new run.
+ * mode is a run index (VNL=0, SKZ=1, KZT=2, NKZ=3), never a ranking scope.
+ */
+forward void GOKZTop_OnRecordAccepted(const char[] apiBaseURL, const char[] steamID64, const char[] mapName,
+	int course, int mode, float runTime, int teleports, const char[] recordUUID);

@@ -3,7 +3,7 @@
 #include <SteamWorks>
 #include <autoexecconfig>
 
-#include <uuid>
+#include "include/uuid.inc"
 
 #include <gokz/top>
 
@@ -121,6 +121,10 @@ public void OnPluginStart()
 public void OnAllPluginsLoaded()
 {
 	GOKZTopPlayers_OnAllPluginsLoaded();
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		PrintSpawnModeRecords(client);
+	}
 }
 
 public void OnPluginEnd()
@@ -130,6 +134,7 @@ public void OnPluginEnd()
 
 public void OnMapStart()
 {
+	for (int client = 1; client <= MaxClients; client++) ClearPendingPBFinishes(client);
 	GOKZTopPlayers_OnMapStart();
 }
 
@@ -156,6 +161,7 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
+	ClearPendingPBFinishes(client);
 	GOKZTopPlayers_OnClientDisconnect(client);
 }
 

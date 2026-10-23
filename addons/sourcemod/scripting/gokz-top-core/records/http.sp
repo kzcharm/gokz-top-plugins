@@ -27,7 +27,7 @@ void RequestNubWR(int client, int mode)
 	URLEncode(mapName, encodedMapName, sizeof(encodedMapName));
 
 	char scope[8];
-	GetLeaderboardScopeForMode(mode, scope, sizeof(scope));
+	GetRecordsScopeForMode(mode, scope, sizeof(scope));
 
 	char path[GOKZ_TOP_MAX_PATH_LENGTH];
 	Format(path, sizeof(path), "/v1/maps/wrs?map_name=%s&scope=%s&type=NUB", encodedMapName, scope);
@@ -51,7 +51,7 @@ void RequestPB(int client, int mode, int recordType, bool printResult)
 	URLEncode(mapName, encodedMapName, sizeof(encodedMapName));
 
 	char scope[8];
-	GetLeaderboardScopeForMode(mode, scope, sizeof(scope));
+	GetRecordsScopeForMode(mode, scope, sizeof(scope));
 
 	char typeName[8];
 	GetRecordTypeName(recordType, typeName, sizeof(typeName));
@@ -68,12 +68,12 @@ void RequestPB(int client, int mode, int recordType, bool printResult)
 	SendRecordGETRequest(path, OnRecordHTTPComplete, pack);
 }
 
-void RequestPBDiff(int client, int mode, int recordType, float runTime, float oldTime, int oldPoints, bool hadBaseline)
+bool RequestPBDiff(int client, int mode, int recordType, float runTime, float oldTime, int oldPoints, bool hadBaseline, int serial)
 {
 	char steamID64[GOKZ_TOP_STEAMID64_LENGTH];
 	if (!GetClientAuthId(client, AuthId_SteamID64, steamID64, sizeof(steamID64), true))
 	{
-		return;
+		return false;
 	}
 
 	char mapName[GOKZ_TOP_MAP_NAME_LENGTH];
@@ -83,7 +83,7 @@ void RequestPBDiff(int client, int mode, int recordType, float runTime, float ol
 	URLEncode(mapName, encodedMapName, sizeof(encodedMapName));
 
 	char scope[8];
-	GetLeaderboardScopeForMode(mode, scope, sizeof(scope));
+	GetRecordsScopeForMode(mode, scope, sizeof(scope));
 
 	char typeName[8];
 	GetRecordTypeName(recordType, typeName, sizeof(typeName));
@@ -96,8 +96,8 @@ void RequestPBDiff(int client, int mode, int recordType, float runTime, float ol
 		scope,
 		typeName);
 
-	DataPack pack = CreateRecordRequestPack(GOKZTopAPIRequest_PBDiff, GetClientUserId(client), GetClientUserId(client), mode, recordType, runTime, oldTime, oldPoints, hadBaseline, mapName);
-	SendRecordGETRequest(path, OnRecordHTTPComplete, pack);
+	DataPack pack = CreateRecordRequestPack(GOKZTopAPIRequest_PBDiff, GetClientUserId(client), GetClientUserId(client), mode, recordType, runTime, oldTime, oldPoints, hadBaseline, mapName, serial);
+	return SendRecordGETRequest(path, OnRecordHTTPComplete, pack);
 }
 
 
@@ -105,8 +105,9 @@ void RequestPBDiff(int client, int mode, int recordType, float runTime, float ol
 // =====[ HTTP FLOW ]=====
 
 DataPack CreateRecordRequestPack(GOKZTopAPIRequestType requestType, int userID, int targetUserID, int mode, int recordType,
-	float runTime, float oldTime, int oldPoints, bool flag, const char[] mapName)
+	float runTime, float oldTime, int oldPoints, bool flag, const char[] mapName, int serial = 0)
 {
+	CheckRecordsEnvironment();
 	DataPack pack = new DataPack();
 	pack.WriteCell(view_as<int>(requestType));
 	pack.WriteCell(userID);
@@ -118,6 +119,10 @@ DataPack CreateRecordRequestPack(GOKZTopAPIRequestType requestType, int userID, 
 	pack.WriteCell(oldPoints);
 	pack.WriteCell(flag ? 1 : 0);
 	pack.WriteString(mapName);
+	pack.WriteCell(serial);
+	pack.WriteString(gC_RecordsEnvironment);
+	int target = GetClientOfUserId(targetUserID);
+	pack.WriteCell(target != 0 ? GetPBRevision(target, mode, recordType, mapName) : 0);
 	return pack;
 }
 
@@ -192,13 +197,24 @@ public void OnRecordHTTPComplete(Handle request, bool failure, bool requestSucce
 	char mapName[GOKZ_TOP_MAP_NAME_LENGTH];
 	ReadRecordRequestPack(pack, requestType, userID, targetUserID, mode, recordType, runTime, oldTime, oldPoints, flag, mapName, sizeof(mapName));
 
+	int serial = pack.ReadCell();
+	char environment[512];
+	pack.ReadString(environment, sizeof(environment));
+	int revision = pack.ReadCell();
+	CheckRecordsEnvironment();
 	int client = GetClientOfUserId(userID);
-	if (client == 0 || !IsClientInGame(client))
+	char currentMap[GOKZ_TOP_MAP_NAME_LENGTH];
+	GetCurrentDisplayMap(currentMap, sizeof(currentMap));
+	bool diffRequest = requestType == GOKZTopAPIRequest_PBDiff;
+	if (client == 0 || !IsClientInGame(client) || !StrEqual(mapName, currentMap) || !StrEqual(environment, gC_RecordsEnvironment)
+		|| (diffRequest && !IsCurrentPBFinish(client, mode, recordType, serial)))
 	{
 		delete pack;
 		delete request;
 		return;
 	}
+
+	if (diffRequest) gPBFinish[client][mode * 2 + recordType].busy = false;
 
 	if (!IsHTTPResponseOK(failure, requestSuccessful, statusCode))
 	{
@@ -241,11 +257,11 @@ public void OnRecordHTTPComplete(Handle request, bool failure, bool requestSucce
 		}
 		case GOKZTopAPIRequest_PB:
 		{
-			HandlePBResponse(client, targetUserID, mode, recordType, mapName, flag, body);
+			HandlePBResponse(client, targetUserID, mode, recordType, mapName, flag, body, revision);
 		}
 		case GOKZTopAPIRequest_PBDiff:
 		{
-			HandlePBDiffResponse(client, mode, recordType, mapName, runTime, oldTime, oldPoints, flag, body);
+			HandlePBDiffResponse(client, mode, recordType, mapName, runTime, oldTime, oldPoints, flag, body, revision);
 		}
 	}
 
@@ -296,11 +312,11 @@ void HandleNubWRResponse(int client, int mode, const char[] mapName, const char[
 	GOKZ_PrintToChat(client, false, "%s{purple}%s{default} - {bluegrey}%s{default} - {gold}NUB{default} WR [ {lightgreen}%s{default} ]",
 		GOKZ_TOP_CHAT_PREFIX,
 		mapName,
-		gC_ModeNamesShort[mode],
+		gC_RecordModeNames[mode],
 		time);
 }
 
-void HandlePBResponse(int client, int targetUserID, int mode, int recordType, const char[] mapName, bool printResult, const char[] body)
+void HandlePBResponse(int client, int targetUserID, int mode, int recordType, const char[] mapName, bool printResult, const char[] body, int revision = -1)
 {
 	float pbTime;
 	int pbPoints;
@@ -316,7 +332,7 @@ void HandlePBResponse(int client, int targetUserID, int mode, int recordType, co
 	int target = GetClientOfUserId(targetUserID);
 	if (target != 0)
 	{
-		StorePB(target, mode, recordType, mapName, pbTime, pbPoints, dateOnly);
+		if (!StorePB(target, mode, recordType, mapName, pbTime, pbPoints, dateOnly, revision)) return;
 	}
 
 	if (printResult)
@@ -325,19 +341,34 @@ void HandlePBResponse(int client, int targetUserID, int mode, int recordType, co
 	}
 }
 
-void HandlePBDiffResponse(int client, int mode, int recordType, const char[] mapName, float runTime, float oldTime, int oldPoints, bool hadBaseline, const char[] body)
+void HandlePBDiffResponse(int client, int mode, int recordType, const char[] mapName, float runTime, float oldTime, int oldPoints, bool hadBaseline, const char[] body, int revision = -1)
 {
 	float fetchedTime;
 	int fetchedPoints;
 	char createdOn[64];
-	if (!ParsePBResponse(body, fetchedTime, fetchedPoints, createdOn, sizeof(createdOn)))
+	if (!ParsePBResponse(body, fetchedTime, fetchedPoints, createdOn, sizeof(createdOn)) || fetchedTime <= 0.0)
 	{
+		return;
+	}
+
+	// Ingestion may still be queued or in flight. Never label old metadata as a new PB.
+	if (fetchedTime > runTime)
+	{
+		int bucket = mode * 2 + recordType;
+		if (!hadBaseline && !gPBFinish[client][bucket].hasBaseline)
+		{
+			gPBFinish[client][bucket].hasBaseline = true;
+			gPBFinish[client][bucket].oldTime = fetchedTime;
+			gPBFinish[client][bucket].oldPoints = fetchedPoints;
+		}
 		return;
 	}
 
 	char dateOnly[GOKZ_TOP_DATE_LENGTH];
 	ISODateOnly(createdOn, dateOnly, sizeof(dateOnly));
-
-	PrintPBLineWithDiff(client, mode, recordType, mapName, runTime, fetchedPoints, dateOnly, hadBaseline, oldTime, oldPoints);
-	StorePB(client, mode, recordType, mapName, runTime, fetchedPoints, dateOnly);
+	if (!StorePB(client, mode, recordType, mapName, fetchedTime, fetchedPoints, dateOnly, revision)) return;
+	bool improved = hadBaseline && runTime < oldTime && fetchedTime == runTime;
+	PrintPBLineWithDiff(client, mode, recordType, mapName, fetchedTime, runTime, fetchedPoints, dateOnly,
+		improved || fetchedTime < runTime || hadBaseline, improved ? oldTime : fetchedTime, improved ? oldPoints : fetchedPoints);
+	gPBFinish[client][mode * 2 + recordType].active = false;
 }

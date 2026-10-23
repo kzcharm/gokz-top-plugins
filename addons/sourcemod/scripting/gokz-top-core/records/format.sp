@@ -15,14 +15,14 @@ void PrintPBLine(int client, int mode, int recordType, const char[] mapName, flo
 		"%s{purple}%s{default} - {bluegrey}%s{default} - %s{default} PB [ {lightgreen}%s{default} | {yellow}%d{default}{grey} Pts{default} | {bluegrey}%s{default} ]",
 		GOKZ_TOP_CHAT_PREFIX,
 		mapName,
-		gC_ModeNamesShort[mode],
+		gC_RecordModeNames[mode],
 		prefix,
 		time,
 		pbPoints,
 		dateShort);
 }
 
-void PrintPBLineWithDiff(int client, int mode, int recordType, const char[] mapName, float pbTime, int pbPoints, const char[] dateOnly,
+void PrintPBLineWithDiff(int client, int mode, int recordType, const char[] mapName, float pbTime, float runTime, int pbPoints, const char[] dateOnly,
 	bool hasStored, float oldTime, int oldPoints)
 {
 	char time[32];
@@ -37,7 +37,8 @@ void PrintPBLineWithDiff(int client, int mode, int recordType, const char[] mapN
 
 	if (hasStored)
 	{
-		float diff = pbTime - oldTime;
+		// Compare the finish with the baseline, while displaying the API's actual PB.
+		float diff = runTime - oldTime;
 		float diffAbs = FloatAbs(diff);
 
 		char diffTime[24];
@@ -79,7 +80,7 @@ void PrintPBLineWithDiff(int client, int mode, int recordType, const char[] mapN
 		"%s{purple}%s{default} - {bluegrey}%s{default} - %s{default} PB [ {lightgreen}%s{default}%s | %s | {bluegrey}%s{default} ]",
 		GOKZ_TOP_CHAT_PREFIX,
 		mapName,
-		gC_ModeNamesShort[mode],
+		gC_RecordModeNames[mode],
 		prefix,
 		time,
 		diffInline,
@@ -91,18 +92,32 @@ void PrintPBLineWithDiff(int client, int mode, int recordType, const char[] mapN
 
 // =====[ PB CACHE ]=====
 
-void StorePB(int client, int mode, int recordType, const char[] mapName, float time, int points, const char[] dateOnly)
+bool StorePB(int client, int mode, int recordType, const char[] mapName, float time, int points, const char[] dateOnly, int expectedRevision = -1)
 {
 	if (time <= 0.0)
 	{
-		return;
+		return false;
 	}
 
 	char key[256];
 	BuildPBKey(client, mode, recordType, mapName, key, sizeof(key));
+	int revision = GetPBRevision(client, mode, recordType, mapName);
+	// A response predating a newer cache write must not replace its metadata.
+	if (expectedRevision != -1 && expectedRevision != revision) return false;
+	gSM_PBRevision.SetValue(key, revision + 1);
 	gSM_PBTime.SetValue(key, view_as<any>(time));
 	gSM_PBPoints.SetValue(key, points);
 	gSM_PBDate.SetString(key, dateOnly);
+	return true;
+}
+
+int GetPBRevision(int client, int mode, int recordType, const char[] mapName)
+{
+	char key[256];
+	BuildPBKey(client, mode, recordType, mapName, key, sizeof(key));
+	int revision;
+	gSM_PBRevision.GetValue(key, revision);
+	return revision;
 }
 
 bool GetStoredPB(int client, int mode, int recordType, const char[] mapName, float &time, int &points, char[] dateOnly, int dateLength)
@@ -166,7 +181,7 @@ void FallbackTierCommand(int client)
 int GetClientMode(int client)
 {
 	int mode = GOKZ_GetCoreOption(client, Option_Mode);
-	if (mode >= 0 && mode < MODE_COUNT)
+	if (IsSupportedRecordsMode(mode))
 	{
 		return mode;
 	}
@@ -176,7 +191,8 @@ int GetClientMode(int client)
 
 bool IsSupportedRecordsMode(int mode)
 {
-	return mode >= Mode_Vanilla && mode < MODE_COUNT;
+	return (mode >= Mode_Vanilla && mode <= Mode_KZTimer)
+		|| (mode == 3 && FindPluginByFile("gokz-mode-noperfkz.smx") != null);
 }
 
 void GetCurrentDisplayMap(char[] mapName, int maxLength)
@@ -354,7 +370,19 @@ int FormatDuration(char[] buffer, int maxLength, float duration)
 
 int FormatDurationDiff(char[] buffer, int maxLength, float duration)
 {
-	return FormatDuration(buffer, maxLength, duration);
+	// Round the gap once using integer centiseconds, avoiding float subtraction
+	// turning an exact displayed 5.78-second gap into 5.77.
+	int centiseconds = RoundToNearest(duration * 100.0);
+	int seconds = centiseconds / 100;
+	if (seconds >= 3600)
+	{
+		return Format(buffer, maxLength, "%02d:%02d:%02d.%02d", seconds / 3600, (seconds / 60) % 60, seconds % 60, centiseconds % 100);
+	}
+	if (seconds >= 60)
+	{
+		return Format(buffer, maxLength, "%02d:%02d.%02d", seconds / 60, seconds % 60, centiseconds % 100);
+	}
+	return Format(buffer, maxLength, "%02d.%02d", seconds, centiseconds % 100);
 }
 
 void URLEncode(const char[] input, char[] output, int maxLength)
@@ -379,4 +407,10 @@ void URLEncode(const char[] input, char[] output, int maxLength)
 		}
 	}
 	output[written] = '\0';
+}
+
+// Run mode 3 is NKZ; leaderboard scope 3 is OVR. NKZ PBs use KZT.
+void GetRecordsScopeForMode(int mode, char[] scope, int maxLength)
+{
+	GetLeaderboardScopeForMode(mode == 3 ? Mode_KZTimer : mode, scope, maxLength);
 }

@@ -23,7 +23,7 @@ public Action Command_Queue(int client, int args)
 	}
 	char environment[512], key[256], server[37];
 	GOKZTop_GetHTTPConfig(environment, sizeof(environment), key, sizeof(key));
-	gCV_Server.GetString(server, sizeof(server));
+	GOKZTop_GetServerSteamID(server, sizeof(server));
 	ReplyToCommand(client, "[gokz.top] API=%s server=%s credentials=%s busy=%d last=%s", environment, server, key[0] ? "configured" : "missing", gBusy, gLastStatus);
 	ReplyToCommand(client, "[gokz.top] Queue summary (use sm_toprecords_queue UUID for details):");
 	DBResultSet rows = SQL_Query(gDB, "SELECT state,count(*) FROM jobs GROUP BY state");

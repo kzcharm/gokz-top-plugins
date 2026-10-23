@@ -10,7 +10,7 @@ public void GOKZ_OnTimerStart_Post(int client, int course)
 	gValid[client] = gFreshMap && ServerSettingsValid() && ClientSettingsValid(client);
 	char key[256];
 	GOKZTop_GetHTTPConfig(gEnvironment[client], sizeof(gEnvironment[]), key, sizeof(key));
-	gCV_Server.GetString(gServer[client], sizeof(gServer[]));
+	GOKZTop_GetServerSteamID(gServer[client], sizeof(gServer[]));
 	UUID_GenerateV7(gGUID[client], sizeof(gGUID[]));
 	if (GetFeatureStatus(FeatureType_Native, "GOKZ_DB_GetRunGUID") == FeatureStatus_Available)
 	{
@@ -25,7 +25,7 @@ JSON_Object Capture_Check(int client, int course)
 	GetCurrentMap(map, sizeof(map));
 	Format(bsp, sizeof(bsp), "maps/%s.bsp", map);
 	if (!Capture_GetSteamID64(client, steam, sizeof(steam))) return null;
-	gCV_Server.GetString(server, sizeof(server));
+	if (!GOKZTop_GetServerSteamID(server, sizeof(server))) return null;
 	int mode = GOKZ_GetCoreOption(client, Option_Mode);
 	if (mode < 0 || mode > 3) return null;
 	JSON_Object body = new JSON_Object();

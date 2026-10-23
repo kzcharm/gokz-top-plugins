@@ -82,6 +82,8 @@ bool BuildServerHeartbeatPayload(
 	char[] buffer,
 	int maxLength)
 {
+	char serverSteamID[32];
+	if (!GOKZTop_GetServerSteamID(serverSteamID, sizeof(serverSteamID))) return false;
 	char escapedHostname[GOKZ_TOP_HOSTNAME_LENGTH * 6];
 	char escapedMap[PLATFORM_MAX_PATH * 6];
 	int playerCount = GetHeartbeatPlayerCount();
@@ -90,7 +92,8 @@ bool BuildServerHeartbeatPayload(
 	EscapeJSONString(gC_CurrentMap, escapedMap, sizeof(escapedMap));
 
 	Format(buffer, maxLength,
-		"{\"ip\":\"%s\",\"port\":%d,\"observed_at\":\"%s\",\"hostname\":\"%s\",\"map\":\"%s\",\"player_count\":%d,\"max_players\":%d,\"players\":[",
+		"{\"server_steamid64\":\"%s\",\"ip\":\"%s\",\"port\":%d,\"observed_at\":\"%s\",\"hostname\":\"%s\",\"map\":\"%s\",\"player_count\":%d,\"max_players\":%d,\"players\":[",
+		serverSteamID,
 		gC_PublicIP,
 		gCV_HostPort.IntValue,
 		observedAt,

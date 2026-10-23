@@ -2,15 +2,18 @@ void HTTP_Next()
 {
 	char environment[512], key[256], server[37], escaped[1024], query[2048];
 	GOKZTop_GetHTTPConfig(environment, sizeof(environment), key, sizeof(key));
-	gCV_Server.GetString(server, sizeof(server));
-	if (!key[0] || !IsRecordUUID(server)) return;
+	GOKZTop_GetServerSteamID(server, sizeof(server));
+	if (!key[0] || !server[0]) return;
+	char legacy[37];
+	gCV_Server.GetString(legacy, sizeof(legacy));
+	if (!IsRecordUUID(legacy)) legacy[0] = '\0';
 	if (!StrEqual(key, gAuthKey))
 	{
 		Queue_SQL("UPDATE jobs SET state=CASE WHEN canonical='' THEN 'record' ELSE 'accepted' END,next=0 WHERE state='auth'");
 		strcopy(gAuthKey, sizeof(gAuthKey), key);
 	}
 	gDB.Escape(environment, escaped, sizeof(escaped));
-	Format(query, sizeof(query), "SELECT id,payload,state,canonical,replay,upstream,attempts,eligible,replay_done FROM jobs WHERE environment='%s' AND server='%s' AND state IN ('record','accepted','reconcile','replay') AND next<=%d ORDER BY next,id LIMIT 1", escaped, server, GetTime());
+	Format(query, sizeof(query), "SELECT id,payload,state,canonical,replay,upstream,attempts,eligible,replay_done FROM jobs WHERE environment='%s' AND server IN ('%s','%s') AND state IN ('record','accepted','reconcile','replay') AND next<=%d ORDER BY next,id LIMIT 1", escaped, server, legacy, GetTime());
 	DBResultSet rows = SQL_Query(gDB, query);
 	if (rows == null || !rows.FetchRow()) { delete rows; return; }
 	char id[37], payload[4096], state[32], canonical[37], replay[PLATFORM_MAX_PATH];

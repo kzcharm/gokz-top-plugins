@@ -55,6 +55,7 @@ GlobalForward gH_OnLeaderboardDataFetched;
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 {
 	CreateNative("GOKZTop_PostJSON", Native_PostJSON);
+	CreateNative("GOKZTop_GetHTTPConfig", Native_GetHTTPConfig);
 	CreateNative("GOKZTop_RefreshLeaderboardData", Native_RefreshLeaderboardData);
 	CreateNative("GOKZTop_GetLeaderboardDataState", Native_GetLeaderboardDataState);
 	CreateNative("GOKZTop_IsLeaderboardDataLoaded", Native_IsLeaderboardDataLoaded);
@@ -1183,4 +1184,14 @@ bool ExtractJsonString(const char[] json, const char[] key, char[] out, int maxL
 
 	out[outPos] = '\0';
 	return false;
+}
+
+public any Native_GetHTTPConfig(Handle plugin, int numParams)
+{
+	char baseURL[512], apiKey[256];
+	gCV_APIBaseURL.GetString(baseURL, sizeof(baseURL));
+	gCV_APIKey.GetString(apiKey, sizeof(apiKey));
+	SetNativeString(1, baseURL, GetNativeCell(2));
+	SetNativeString(3, apiKey, GetNativeCell(4));
+	return 0;
 }

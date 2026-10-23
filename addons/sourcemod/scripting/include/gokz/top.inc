@@ -18,6 +18,9 @@ enum GOKZTopLeaderboardDataState
 	GOKZTopLeaderboardData_Error
 };
 
+/** Shared configuration for durable HTTP clients. Never persist the returned key. */
+native void GOKZTop_GetHTTPConfig(char[] baseURL, int urlLength, char[] apiKey, int keyLength);
+
 /**
  * Posts a raw JSON payload to a gokz-top API path.
  *

@@ -54,6 +54,15 @@ void SendServerHeartbeat()
 		LogError("[gokz-top-servers] Server heartbeat payload exceeded %d bytes", sizeof(encoded) - 1);
 		return;
 	}
+	if (GetFeatureStatus(FeatureType_Native, "GOKZTop_GetRecordsStatus") == FeatureStatus_Available)
+	{
+		char recordsStatus[512];
+		if (GOKZTop_GetRecordsStatus(recordsStatus, sizeof(recordsStatus)))
+		{
+			if (!AppendJSONString(encoded, sizeof(encoded) - 1, ",\"gokz_top_status\":")
+				|| !AppendJSONString(encoded, sizeof(encoded) - 1, recordsStatus)) return;
+		}
+	}
 	BuildGlobalStatusJSON(globalStatus, sizeof(globalStatus));
 	BuildServerPerformanceJSON(serverPerformance, sizeof(serverPerformance));
 	if (!AppendJSONString(encoded, sizeof(encoded) - 1, serverPerformance))

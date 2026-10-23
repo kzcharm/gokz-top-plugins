@@ -82,6 +82,7 @@ bool gB_PublicIPRefreshInFlight;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 {
+	MarkNativeAsOptional("GOKZTop_GetRecordsStatus");
 	gB_LateLoaded = late;
 	return APLRes_Success;
 }

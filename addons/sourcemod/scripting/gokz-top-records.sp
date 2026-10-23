@@ -43,6 +43,7 @@ char gModeNames[][] = {"VNL", "SKZ", "KZT", "NKZ"};
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 {
+	CreateNative("GOKZTop_GetRecordsStatus", Native_GetRecordsStatus);
 	MarkNativeAsOptional("GOKZ_DB_GetRunGUID");
 	gFreshMap = !late;
 	gLateMap = late;
@@ -91,4 +92,29 @@ public void OnLibraryRemoved(const char[] name)
 		gFreshMap = false;
 		InvalidateAll();
 	}
+}
+
+public int Native_GetRecordsStatus(Handle plugin, int numParams)
+{
+	JSON_Object body = new JSON_Object();
+	body.SetBool("plugins_valid", LibraryExists("gokz-anticheat") && LibraryExists("movementapi"));
+	body.SetBool("settings_enforcer_valid", gFreshMap && ServerSettingsValid());
+	char map[PLATFORM_MAX_PATH], path[PLATFORM_MAX_PATH];
+	GetCurrentMap(map, sizeof(map));
+	Format(path, sizeof(path), "maps/%s.bsp", map);
+	int size = FileSize(path, true);
+	body.SetInt("bsp_size", size > 0 ? size : 0);
+	JSON_Object versions = new JSON_Object();
+	for (int mode = 0; mode < 4; mode++)
+	{
+		if (mode == 3 && FindPluginByFile("gokz-mode-noperfkz.smx") == null) continue;
+		if (GOKZ_GetModeLoaded(mode)) versions.SetInt(gModeNames[mode], GOKZ_GetModeVersion(mode));
+	}
+	body.SetObject("mode_versions", versions);
+	char encoded[512];
+	json_encode(body, encoded, sizeof(encoded));
+	SetNativeString(1, encoded, GetNativeCell(2));
+	body.Cleanup();
+	delete body;
+	return true;
 }

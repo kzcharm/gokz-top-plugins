@@ -132,9 +132,9 @@ void BuildGlobalStatusJSON(char[] buffer, int maxLength)
 		pluginsValid ? "true" : "false",
 		settingsValid ? "true" : "false",
 		mapValid ? "true" : "false",
-		gB_GlobalModeAvailable[0] ? "true" : "false",
-		gB_GlobalModeAvailable[1] ? "true" : "false",
-		gB_GlobalModeAvailable[2] ? "true" : "false",
+		gB_GlobalModeAvailable[Mode_KZTimer] ? "true" : "false",
+		gB_GlobalModeAvailable[Mode_SimpleKZ] ? "true" : "false",
+		gB_GlobalModeAvailable[Mode_Vanilla] ? "true" : "false",
 		checkedAt);
 }
 

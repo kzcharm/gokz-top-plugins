@@ -154,3 +154,6 @@ stock bool GOKZTop_GetServerSteamID(char[] buffer, int maxLength)
 	GetServerAuthId(AuthId_SteamID64, buffer, maxLength);
 	return buffer[0] != '\0' && !StrEqual(buffer, "0") && !StrEqual(buffer, "1") && !StrEqual(buffer, "[I:0:1]");
 }
+
+/** Optional records-plugin heartbeat evidence; JSON buffer, false if unavailable. */
+native bool GOKZTop_GetRecordsStatus(char[] buffer, int maxLength);

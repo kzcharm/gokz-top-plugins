@@ -43,71 +43,104 @@ public Action Command_Retry(int client, int args)
 	return Plugin_Handled;
 }
 
+static int sCheckSerial[MAXPLAYERS + 1], sCheckPending[MAXPLAYERS + 1];
+static bool sCheckModes[MAXPLAYERS + 1][4], sCheckAuth[MAXPLAYERS + 1], sCheckMap[MAXPLAYERS + 1], sCheckPlayer[MAXPLAYERS + 1];
+static bool sCheckPlugins[MAXPLAYERS + 1], sCheckSettings[MAXPLAYERS + 1];
+
 public Action Command_Check(int client, int args)
 {
 	if (client <= 0) return Command_Queue(client, args);
+	int serial = GetClientSerial(client);
+	if (sCheckSerial[client] == serial && sCheckPending[client] > 0) return Plugin_Handled;
+	sCheckSerial[client] = serial;
+	sCheckPending[client] = 0;
+	for (int mode = 0; mode < 4; mode++) sCheckModes[client][mode] = false;
+	sCheckAuth[client] = sCheckMap[client] = sCheckPlayer[client] = false;
+	sCheckPlugins[client] = LibraryExists("gokz-anticheat") && LibraryExists("movementapi");
+	sCheckSettings[client] = gFreshMap && ServerSettingsValid();
 	JSON_Object body = Capture_Check(client, GOKZ_GetCourse(client));
 	if (body == null)
 	{
-		PrintCheckUnavailable(client);
+		PrintCheckResult(client);
 		return Plugin_Handled;
 	}
-	char payload[4096], environment[512], key[256], url[768];
-	json_encode(body, payload, sizeof(payload)); body.Cleanup(); delete body;
+	char environment[512], key[256], url[768];
 	GOKZTop_GetHTTPConfig(environment, sizeof(environment), key, sizeof(key));
-	GOKZ_PrintToChat(client, false, "%sRecords Availability Check", GOKZ_TOP_CHAT_PREFIX);
 	Format(url, sizeof(url), "%s/v1/records/check", environment);
-	Handle request = SteamWorks_CreateHTTPRequest(k_EHTTPMethodPOST, url);
-	if (request == null)
+	// Count requests before sending: unsupported NKZ is never queried on stock GOKZ.
+	bool loaded[4];
+	for (int mode = 0; mode < 4; mode++)
 	{
-		PrintCheckUnavailable(client);
-		return Plugin_Handled;
+		if (mode == 3 && FindPluginByFile("gokz-mode-noperfkz.smx") == null) continue;
+		loaded[mode] = GOKZ_GetModeLoaded(mode);
+		if (loaded[mode]) sCheckPending[client]++;
 	}
-	SteamWorks_SetHTTPRequestHeaderValue(request, "X-Server-Group-Key", key);
-	SteamWorks_SetHTTPRequestRawPostBody(request, "application/json", payload, strlen(payload));
-	SteamWorks_SetHTTPRequestContextValue(request, GetClientSerial(client));
-	SteamWorks_SetHTTPCallbacks(request, OnCheckComplete);
-	SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(request, 10000);
-	if (!SteamWorks_SendHTTPRequest(request))
+	for (int mode = 0; mode < 4; mode++)
 	{
+		if (!loaded[mode]) continue;
+		body.SetString("mode", gModeNames[mode]);
+		body.SetInt("mode_version", GOKZ_GetModeVersion(mode));
+		char payload[4096];
+		json_encode(body, payload, sizeof(payload));
+		Handle request = SteamWorks_CreateHTTPRequest(k_EHTTPMethodPOST, url);
+		DataPack context = new DataPack();
+		context.WriteCell(serial);
+		context.WriteCell(mode);
+		if (request != null)
+		{
+			SteamWorks_SetHTTPRequestHeaderValue(request, "X-Server-Group-Key", key);
+			SteamWorks_SetHTTPRequestRawPostBody(request, "application/json", payload, strlen(payload));
+			SteamWorks_SetHTTPRequestContextValue(request, context);
+			SteamWorks_SetHTTPCallbacks(request, OnCheckComplete);
+			SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(request, 10000);
+			if (SteamWorks_SendHTTPRequest(request)) continue;
+		}
+		delete context;
 		delete request;
-		PrintCheckUnavailable(client);
+		sCheckPending[client]--;
 	}
+	body.Cleanup();
+	delete body;
+	if (sCheckPending[client] == 0) PrintCheckResult(client);
 	return Plugin_Handled;
 }
 
-public void OnCheckComplete(Handle request, bool failure, bool successful, EHTTPStatusCode statusCode, any serial)
+public void OnCheckComplete(Handle request, bool failure, bool successful, EHTTPStatusCode statusCode, DataPack context)
 {
-	int client = GetClientFromSerial(serial);
+	context.Reset();
+	int client = GetClientFromSerial(context.ReadCell());
+	int mode = context.ReadCell();
+	delete context;
 	if (client)
 	{
 		char response[4096];
 		HTTP_ReadBody(request, response, sizeof(response));
-		PrintToConsole(client, "GOKZ.TOP | HTTP %d: %s", statusCode, response);
+		PrintToConsole(client, "GOKZ.TOP | %s HTTP %d: %s", gModeNames[mode], statusCode, response);
 		JSON_Object body = json_decode(response);
 		JSON_Object checks = body != null ? body.GetObject("checks") : null;
 		if (!failure && successful && statusCode == k_EHTTPStatusCode200OK && checks != null)
 		{
-			GOKZ_PrintToChat(client, false, "%sAPI Key %s {grey}| Server %s {grey}| Group %s", GOKZ_TOP_CHAT_PREFIX,
-				CheckMark(checks.GetBool("authentication")), CheckMark(checks.GetBool("server")), CheckMark(checks.GetBool("group")));
-			GOKZ_PrintToChat(client, false, "%sMap %s {grey}| Course %s {grey}| Filter %s {grey}| You %s", GOKZ_TOP_CHAT_PREFIX,
-				CheckMark(checks.GetBool("map")), CheckMark(checks.GetBool("course")), CheckMark(checks.GetBool("filter")), CheckMark(checks.GetBool("player")));
-			GOKZ_PrintToChat(client, false, "%sMode %s {grey}| Integrity %s {grey}| API {green}✓", GOKZ_TOP_CHAT_PREFIX,
-				CheckMark(checks.GetBool("mode")), CheckMark(checks.GetBool("integrity")));
+			sCheckAuth[client] = checks.GetBool("authentication") && checks.GetBool("server") && checks.GetBool("group");
+			sCheckMap[client] = checks.GetBool("map") && checks.GetBool("course");
+			sCheckPlayer[client] = checks.GetBool("player") && ClientSettingsValid(client) && (!gRun[client] || gValid[client]);
+			sCheckModes[client][mode] = checks.GetBool("mode") && checks.GetBool("filter");
 		}
-		else PrintCheckUnavailable(client);
 		if (body != null) body.Cleanup();
 		delete body;
-		DBResultSet queue = SQL_Query(gDB, "SELECT count(*) FROM jobs WHERE state NOT IN ('done','rejected')");
-		int pending;
-		if (queue != null && queue.FetchRow()) pending = queue.FetchInt(0);
-		delete queue;
-		GOKZ_PrintToChat(client, false, "%sQueued: {purple}%d {grey}| Details in console", GOKZ_TOP_CHAT_PREFIX, pending);
+		if (--sCheckPending[client] == 0) PrintCheckResult(client);
 	}
 	delete request;
 }
 
-static void PrintCheckUnavailable(int client)
+static void PrintCheckResult(int client)
 {
-	GOKZ_PrintToChat(client, false, "%sAPI {darkred}X {grey}| Eligibility unavailable. Details in console.", GOKZ_TOP_CHAT_PREFIX);
+	GOKZ_PrintToChat(client, false, "%sRecords Availability Check", GOKZ_TOP_CHAT_PREFIX);
+	GOKZ_PrintToChat(client, false, "%sAPI Key %s {grey}| Plugins %s {grey}| Settings %s {grey}| Map %s {grey}| You %s", GOKZ_TOP_CHAT_PREFIX,
+		CheckMark(sCheckAuth[client]), CheckMark(sCheckPlugins[client]), CheckMark(sCheckSettings[client]), CheckMark(sCheckMap[client]), CheckMark(sCheckPlayer[client]));
+	GOKZ_PrintToChat(client, false, "%s{purple}VNL %s {grey}| {purple}SKZ %s {grey}| {purple}KZT %s {grey}| {purple}NKZ %s", GOKZ_TOP_CHAT_PREFIX,
+		CheckMark(sCheckModes[client][0]), CheckMark(sCheckModes[client][1]), CheckMark(sCheckModes[client][2]), CheckMark(sCheckModes[client][3]));
+	DBResultSet queue = SQL_Query(gDB, "SELECT count(*) FROM jobs WHERE state NOT IN ('done','rejected')");
+	if (queue != null && queue.FetchRow()) PrintToConsole(client, "GOKZ.TOP | Queued uploads: %d", queue.FetchInt(0));
+	delete queue;
+	PrintToConsole(client, "GOKZ.TOP | Fresh map: %s. Last upload: %s", gFreshMap ? "yes" : "no", gLastStatus);
 }

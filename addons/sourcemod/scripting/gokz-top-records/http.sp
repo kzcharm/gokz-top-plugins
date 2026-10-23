@@ -104,14 +104,14 @@ public void OnRecordHTTPComplete(Handle request, bool failure, bool successful, 
 				char result[32]; body.GetString("state", result, sizeof(result));
 				if (StrEqual(result, "verified"))
 				{
-					Format(query, sizeof(query), "UPDATE jobs SET upstream=0,state='replay',attempts=0,next=0,eligible=%d WHERE id='%s'", body.GetBool("replay_eligible") ? 1 : 0, id);
+					Format(query, sizeof(query), "UPDATE jobs SET upstream=0,state='replay',attempts=0,next=0,eligible=%d,error='' WHERE id='%s'", body.GetBool("replay_eligible") ? 1 : 0, id);
 					Queue_SQL(query);
 				}
 				else Queue_State(id, "replay", GetTime() + 30, "Upstream reconciliation pending; inspect backend claim");
 			}
 			else if (body.GetBool("available"))
 			{
-				Format(query, sizeof(query), "UPDATE jobs SET replay_done=1,state=CASE WHEN upstream>0 THEN 'accepted' ELSE 'done' END,next=%d WHERE id='%s'", GetTime() + 60, id);
+				Format(query, sizeof(query), "UPDATE jobs SET replay_done=1,state=CASE WHEN upstream>0 THEN 'accepted' ELSE 'done' END,next=%d,error='' WHERE id='%s'", GetTime() + 60, id);
 				Queue_SQL(query);
 			}
 			body.Cleanup(); delete body;

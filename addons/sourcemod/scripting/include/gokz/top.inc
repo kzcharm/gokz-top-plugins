@@ -147,3 +147,10 @@ public void __pl_gokz_top_core_SetNTVOptional()
 	MarkNativeAsOptional("GOKZTop_GetPoints");
 }
 #endif
+
+/** Authenticated game-server SteamID64; false until Steam authentication completes. */
+stock bool GOKZTop_GetServerSteamID(char[] buffer, int maxLength)
+{
+	GetServerAuthId(AuthId_SteamID64, buffer, maxLength);
+	return buffer[0] != '\0' && !StrEqual(buffer, "0") && !StrEqual(buffer, "1") && !StrEqual(buffer, "[I:0:1]");
+}

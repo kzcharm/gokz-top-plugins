@@ -51,7 +51,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 
 public void OnPluginStart()
 {
-	gCV_Server = CreateConVar("gokz_top_records_server_id", "", "Native gokz.top server UUID. Queued jobs retain their original server identity.");
+	gCV_Server = CreateConVar("gokz_top_records_server_id", "", "Deprecated: previous server UUID, used only to drain legacy queued jobs. New runs use the authenticated server SteamID.");
 	gCV_Spool = CreateConVar("gokz_top_records_spool_gib", "10", "Maximum private replay spool size in GiB.", _, true, 0.0);
 	AutoExecConfig(true, "gokz-top-records", "sourcemod/gokz-top");
 	BuildPath(Path_SM, gSpool, sizeof(gSpool), "data/gokz-top-records");

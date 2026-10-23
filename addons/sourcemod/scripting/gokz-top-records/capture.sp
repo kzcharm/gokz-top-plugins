@@ -1,8 +1,8 @@
 public void GOKZ_OnTimerStart_Post(int client, int course)
 {
 	if (!IsClientInGame(client) || IsFakeClient(client)) return;
-	int mode = GOKZ_GetOption(client, "Mode");
-	gRun[client] = mode >= 0 && mode <= 3 && GOKZ_GetOption(client, "Style") == 0;
+	int mode = GOKZ_GetCoreOption(client, Option_Mode);
+	gRun[client] = mode >= 0 && mode <= 3 && GOKZ_GetCoreOption(client, Option_Style) == 0;
 	if (!gRun[client]) return;
 	// A client actually running mode 3 proves NKZ support; never query index 3 on stock GOKZ.
 	gMode[client] = mode;
@@ -26,7 +26,7 @@ JSON_Object Capture_Check(int client, int course)
 	Format(bsp, sizeof(bsp), "maps/%s.bsp", map);
 	GetClientAuthId(client, AuthId_SteamID64, steam, sizeof(steam));
 	gCV_Server.GetString(server, sizeof(server));
-	int mode = GOKZ_GetOption(client, "Mode");
+	int mode = GOKZ_GetCoreOption(client, Option_Mode);
 	if (mode < 0 || mode > 3) return null;
 	JSON_Object body = new JSON_Object();
 	body.SetString("server_id", gRun[client] ? gServer[client] : server);
@@ -36,7 +36,7 @@ JSON_Object Capture_Check(int client, int course)
 	body.SetString("mode", gModeNames[mode]);
 	body.SetInt("mode_version", GOKZ_GetModeVersion(mode));
 	body.SetString("steamid64", steam);
-	body.SetInt("style", GOKZ_GetOption(client, "Style"));
+	body.SetInt("style", GOKZ_GetCoreOption(client, Option_Style));
 	body.SetInt("tickrate", RoundToNearest(1.0 / GetTickInterval()));
 	JSON_Object integrity = new JSON_Object();
 	integrity.SetBool("fresh_map", gFreshMap);

@@ -77,7 +77,7 @@ public void OnYawChecked(QueryCookie cookie, int client, ConVarQueryResult resul
 
 public void GOKZ_OnOptionChanged(int client, const char[] option, any value)
 {
-	if (StrEqual(option, "Mode") || StrEqual(option, "Style")) gValid[client] = false;
+	if (StrEqual(option, gC_CoreOptionNames[Option_Mode]) || StrEqual(option, gC_CoreOptionNames[Option_Style])) gValid[client] = false;
 }
 
 public void GOKZ_OnModeUnloaded(int mode)

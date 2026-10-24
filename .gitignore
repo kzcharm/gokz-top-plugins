@@ -2,3 +2,5 @@
 sm/
 addons/sourcemod/plugins/*.smx
 addons/sourcemod/scripting/*.smx
+.sdk/
+addons/sourcemod/extensions/*.so

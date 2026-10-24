@@ -98,6 +98,23 @@ jobs:
           mkdir -p addons/sourcemod/plugins
           mv sm/addons/sourcemod/scripting/*.smx addons/sourcemod/plugins/
 
+      - name: checkout filesystem helper SDK
+        uses: actions/checkout@v4
+        with:
+          repository: alliedmodders/sourcemod
+          ref: 1.12-dev
+          submodules: recursive
+          path: .sdk/sourcemod
+
+      - name: build replay filesystem helper
+        run: |
+          sudo apt-get install -y g++-multilib
+          mkdir -p addons/sourcemod/extensions
+          SOURCEMOD_SDK="$PWD/.sdk/sourcemod" \
+          SOURCEPAWN_SDK="$PWD/.sdk/sourcemod/sourcepawn" \
+          AMTL_SDK="$PWD/.sdk/sourcemod/public/amtl" \
+            bash extensions/replay-filesystem/build.sh addons/sourcemod/extensions/gokz_top_replay_fs.ext.so
+
       - name: package
         shell: bash
         run: |
@@ -111,6 +128,8 @@ jobs:
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude 'sm/' \
+            --exclude '.sdk/' \
+            --exclude 'extensions/' \
             --exclude '*.md' \
             --exclude '*.zip' \
             --exclude 'addons/sourcemod/scripting/' \
@@ -120,6 +139,8 @@ jobs:
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude 'sm/' \
+            --exclude '.sdk/' \
+            --exclude 'extensions/' \
             --exclude '*.md' \
             --exclude '*.zip' \
             --exclude 'cfg/' \
@@ -137,6 +158,8 @@ jobs:
           name: gokz-top-plugins-${{ env.GOKZ_VERSION }}
           path: |
             .
+            !.sdk*
+            !extensions*
             !sm*
             !.github*
             !.git*
@@ -150,6 +173,8 @@ jobs:
           name: gokz-top-plugins-${{ env.GOKZ_VERSION }}-upgrade
           path: |
             .
+            !.sdk*
+            !extensions*
             !sm*
             !.github*
             !.git*

@@ -68,3 +68,46 @@ Like GOKZ's `!goto`, the command blocks teleporting during a valid run when
 the player's safeguard is enabled. Otherwise it stops a running timer before
 teleporting. Maps without detected rooms return an empty result and remain
 playable normally.
+
+## Jumpstat replay uploads
+
+Install `gokz-top-replays.smx` with the bundled Linux `gokz_top_replay_fs.ext.so`
+in `addons/sourcemod/extensions/`. The helper inspects filesystem entries with
+`lstat` so discovery skips symbolic links. No recorder changes are required.
+
+The uploader discovers both legacy player/type filenames and AXE UUID filenames
+under `data/gokz-replays/_jumps/`. Identity and statistics come from the replay
+header; players can disconnect before upload. Only normal-style supported jumps
+are eligible: each player's best 10 LJs and best jump of each other type per mode.
+The recorder must save a file first; this plugin does not record additional jumps.
+
+Scanning processes at most 128 entries with a 2 ms budget every 100 ms and waits
+60 seconds between complete passes. A private SQLite index avoids resubmitting
+unchanged files. First installation starts at activation time; existing older
+files require manual recovery. Subsequent reloads retain that activation floor
+and discover files saved during downtime. Empty servers must process game ticks
+for background work to progress.
+
+Back up `data/sqlite/gokz-top-replays.sq3` and `data/gokz-top-replays/` together.
+The latter contains immutable upload snapshots. Jobs retain their original API
+URL and never store keys. A process-held filesystem lock elects one uploader
+when multiple game instances share the same SourceMod directory; other instances
+wait and take over automatically when it exits. One request runs at a time. Transient failures retry
+with delays of 5, 15, 60, then 300 seconds, up to eight attempts. Authentication
+failures pause; correct the key and run `sm_topreplays_retry`. That command also
+resumes exhausted jobs. `sm_topreplays_status` shows queue counts and scan timing.
+Rejected/ineligible snapshots are deleted; exhausted/authentication jobs remain.
+
+To build the helper on Linux, provide a SourceMod SDK checkout **with its pinned
+SourcePawn and AMTL submodules**, then run:
+
+```bash
+SOURCEMOD_SDK=/path/to/sourcemod \
+SOURCEPAWN_SDK=/path/to/sourcemod/sourcepawn \
+AMTL_SDK=/path/to/sourcemod/public/amtl \
+  bash extensions/replay-filesystem/build.sh /output/gokz_top_replay_fs.ext.so
+```
+
+The build uses a multilib C++ compiler for CS:GO's 32-bit Linux runtime. Do not
+substitute SourcePawn master headers for the SDK's pinned revision: their native
+context ABI can differ. Release archives include the compiled helper.

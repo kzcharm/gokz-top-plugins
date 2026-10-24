@@ -24,7 +24,7 @@ Build/install `gokz_top_replay_fs.ext.so` using the SDK's pinned submodules as
 described in the main README. Compile `tests/jump_replays.sp` with the same include
 paths as the uploader, then load the probe. It exercises the production modules
 without starting a worker or making HTTP requests. Expect
-`[jump-replays-test] PASS assertions=40`. The probe creates its own
+`[jump-replays-test] PASS assertions=42`. The probe creates its own
 `data/sqlite/gokz-top-replays-tests.sq3` and snapshot directory, and overwrites one
 byte of the synthetic fixture to check that an existing snapshot stays unchanged.
 Regenerate fixtures before repeating the probe.

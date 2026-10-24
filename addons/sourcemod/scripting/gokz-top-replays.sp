@@ -16,7 +16,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define GOKZ_TOP_REPLAYS_VERSION "0.2.1"
+#define GOKZ_TOP_REPLAYS_VERSION "0.2.2"
 #define GOKZ_TOP_REPLAYS_USER_AGENT "gokz-top-replays/" ... GOKZ_TOP_REPLAYS_VERSION
 #define GOKZ_TOP_REPLAYS_MAX_URL_LENGTH 512
 #define GOKZ_TOP_REPLAYS_MAX_PATH_LENGTH 512
@@ -48,7 +48,8 @@ Database gDB;
 ConVar gCV_RequestTimeout;
 char gSpool[PLATFORM_MAX_PATH], gEnvironment[512], gKey[256], gActiveEnvironment[512];
 int gActiveID, gAttempts, gFloor, gPassStart, gNextScan;
-bool gBusy, gOwnWorker;
+bool gBusy, gOwnWorker, gHibernating;
+Handle gActiveRequest;
 float gMaxScanSeconds;
 ArrayList gDirectories;
 DirectoryListing gListing;
@@ -65,6 +66,8 @@ public void OnPluginStart()
 	BuildPath(Path_SM, gSpool, sizeof(gSpool), "data/gokz-top-replays");
 	CreateDirectory(gSpool, 448);
 	QueueInit();
+	ConVar hibernate = FindConVar("sv_hibernate_when_empty");
+	gHibernating = hibernate != null && hibernate.BoolValue && GetClientCount(true) == 0;
 	gDirectories = new ArrayList(ByteCountToCells(PLATFORM_MAX_PATH));
 	RegAdminCmd("sm_topreplays_retry", CommandRetry, ADMFLAG_ROOT);
 	RegAdminCmd("sm_topreplays_status", CommandStatus, ADMFLAG_ROOT);
@@ -79,14 +82,15 @@ public void OnAllPluginsLoaded()
 
 public void OnPluginEnd()
 {
+	ReleaseWorker();
 	delete gListing;
 	delete gDirectories;
 	delete gDB;
-	if (gOwnWorker) GOKZTop_ReplayReleaseWorker();
 }
 
 public Action TimerWorker(Handle timer)
 {
+	if (gHibernating) return Plugin_Continue;
 	GOKZTop_GetHTTPConfig(gEnvironment, sizeof(gEnvironment), gKey, sizeof(gKey));
 	TrimString(gEnvironment);
 	int length = strlen(gEnvironment);
@@ -129,4 +133,35 @@ public Action GOKZ_RP_OnReplaySaved(int client, int replayType, const char[] map
 	// Scanner retries young files after the writer has closed them.
 	if (replayType == ReplayType_Jump) DiscoverFile(filePath);
 	return Plugin_Continue;
+}
+
+void ReleaseWorker()
+{
+	if (gBusy && gDB != null)
+	{
+		// A cancelled POST may still finish at the API. Leave time for it to
+		// settle before another instance retries the same immutable snapshot.
+		char query[256];
+		int timeout = gCV_RequestTimeout == null ? 10 : gCV_RequestTimeout.IntValue;
+		Format(query, sizeof(query), "UPDATE jobs SET next=%d WHERE id=%d AND state='pending'", GetTime() + timeout + 5, gActiveID);
+		QueueSQL(query);
+	}
+	delete gActiveRequest;
+	gBusy = false;
+	delete gListing;
+	if (gDirectories != null) gDirectories.Clear();
+	gNextScan = 0;
+	if (gOwnWorker) GOKZTop_ReplayReleaseWorker();
+	gOwnWorker = false;
+}
+
+public void OnServerEnterHibernation()
+{
+	gHibernating = true;
+	ReleaseWorker();
+}
+
+public void OnServerExitHibernation()
+{
+	gHibernating = false;
 }

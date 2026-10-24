@@ -87,6 +87,10 @@ public void OnPluginStart()
 	body.Cleanup(); delete body;
 	char rounded[32];
 	Check(GOKZTop_FormatJumpDistance(278.53125, rounded, sizeof(rounded)) && StrEqual(rounded, "278.5313"), "backend half-up distance rounding");
+	OnServerEnterHibernation();
+	Check(gHibernating && !gOwnWorker && !gBusy, "hibernation releases worker");
+	OnServerExitHibernation();
+	Check(!gHibernating, "wake permits takeover");
 	LogMessage("[jump-replays-test] PASS assertions=%d", gAssertions);
 }
 

@@ -34,6 +34,7 @@ void SendJobRequest(bool upload, const char[] endpoint)
 	if (!JobURL(endpoint, url, sizeof(url))) { FinishJob(422); return; }
 	Handle request = SteamWorks_CreateHTTPRequest(upload ? k_EHTTPMethodPOST : k_EHTTPMethodGET, url);
 	if (request == null) { FinishJob(0); return; }
+	gActiveRequest = request;
 	ApplyCommonHeaders(request, "application/json");
 	SteamWorks_SetHTTPRequestHeaderValue(request, "X-Server-Group-Key", key);
 	SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(request, gCV_RequestTimeout == null ? 10000 : gCV_RequestTimeout.IntValue * 1000);
@@ -44,22 +45,23 @@ void SendJobRequest(bool upload, const char[] endpoint)
 		char path[PLATFORM_MAX_PATH]; JobPath(gActiveID, path, sizeof(path));
 		if (!SteamWorks_SetHTTPRequestRawPostBodyFromFile(request, "application/octet-stream", path))
 		{
-			delete request; FinishJob(0); return;
+			CloseJobRequest(request); FinishJob(0); return;
 		}
 	}
-	if (!SteamWorks_SendHTTPRequest(request)) { delete request; FinishJob(0); }
+	if (!SteamWorks_SendHTTPRequest(request)) { CloseJobRequest(request); FinishJob(0); }
 }
 
 public void OnJobComplete(Handle request, bool failure, bool requestSuccessful, EHTTPStatusCode statusCode, int upload)
 {
+	if (request != gActiveRequest) return;
 	int status = view_as<int>(statusCode);
 	if (!IsHTTPResponseOK(failure, requestSuccessful, statusCode))
 	{
-		delete request; FinishJob(failure || !requestSuccessful ? 0 : status); return;
+		CloseJobRequest(request); FinishJob(failure || !requestSuccessful ? 0 : status); return;
 	}
-	if (upload) { delete request; FinishJob(201); return; }
+	if (upload) { CloseJobRequest(request); FinishJob(201); return; }
 	char response[1024];
-	bool read = ReadHTTPResponseBody(request, response, sizeof(response)); delete request;
+	bool read = ReadHTTPResponseBody(request, response, sizeof(response)); CloseJobRequest(request);
 	JSON_Object body = read ? json_decode(response) : null;
 	if (body == null || body.GetKeyType("eligible") != Type_Bool)
 	{
@@ -89,4 +91,10 @@ void FinishJob(int status)
 	}
 	LogMessage("[gokz-top-replays] job=%d attempt=%d status=%d", gActiveID, gAttempts, status);
 	gBusy = false;
+}
+
+void CloseJobRequest(Handle request)
+{
+	if (gActiveRequest == request) gActiveRequest = null;
+	delete request;
 }

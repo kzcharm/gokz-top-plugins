@@ -92,7 +92,8 @@ Back up `data/sqlite/gokz-top-replays.sq3` and `data/gokz-top-replays/` together
 The latter contains immutable upload snapshots. Jobs retain their original API
 URL and never store keys. A process-held filesystem lock elects one uploader
 when multiple game instances share the same SourceMod directory; other instances
-wait and take over automatically when it exits. One request runs at a time. Transient failures retry
+wait and take over automatically when it exits or hibernates. In-flight requests
+are cancelled on hibernation, with a retry delay to let any accepted POST settle. One request runs at a time. Transient failures retry
 with delays of 5, 15, 60, then 300 seconds, up to eight attempts. Authentication
 failures pause; correct the key and run `sm_topreplays_retry`. That command also
 resumes exhausted jobs. `sm_topreplays_status` shows queue counts and scan timing.

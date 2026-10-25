@@ -13,6 +13,7 @@
 
 #pragma newdecls required
 #pragma semicolon 1
+#pragma dynamic 524288
 
 native int GOKZ_DB_GetRunGUID(int client, char guid[37]);
 
@@ -21,7 +22,7 @@ public Plugin myinfo =
 	name = "GOKZ Top Records",
 	author = "KZCharm",
 	description = "Durable direct records and replay uploads to gokz.top",
-	version = "1.0.0",
+	version = "1.0.1",
 	url = "https://gokz.top"
 };
 
@@ -36,6 +37,7 @@ char gModeNames[][] = {"VNL", "SKZ", "KZT", "NKZ"};
 
 #include "gokz-top-records/validation.sp"
 #include "gokz-top-records/queue.sp"
+#include "gokz-top-records/eligibility.sp"
 #include "gokz-top-records/capture.sp"
 #include "gokz-top-records/http.sp"
 #include "gokz-top-records/forwards.sp"
@@ -61,6 +63,7 @@ public void OnPluginStart()
 	BuildPath(Path_SM, gSpool, sizeof(gSpool), "data/gokz-top-records");
 	CreateDirectory(gSpool, 448);
 	Queue_Init();
+	Eligibility_Init();
 	Validation_Init();
 	RegConsoleCmd("sm_topcheck", Command_Check);
 	RegConsoleCmd("sm_tc", Command_Check);
@@ -71,6 +74,7 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	Eligibility_PrefetchCurrent();
 	if (gLateMap)
 	{
 		gLateMap = false;

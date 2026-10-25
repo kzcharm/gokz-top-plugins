@@ -6,6 +6,11 @@ void Queue_Init()
 	char databasePath[PLATFORM_MAX_PATH];
 	BuildPath(Path_SM, databasePath, sizeof(databasePath), "data/sqlite/gokz-top-records.sq3");
 	SetFilePermissions(databasePath, 384);
+	Queue_CreateTables();
+}
+
+void Queue_CreateTables()
+{
 	Queue_SQL("PRAGMA synchronous=FULL");
 	Queue_SQL("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, environment TEXT NOT NULL, steam2 TEXT NOT NULL DEFAULT '', server TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'record', attempts INTEGER NOT NULL DEFAULT 0, next INTEGER NOT NULL DEFAULT 0, canonical TEXT NOT NULL DEFAULT '', replay TEXT NOT NULL DEFAULT '', upstream INTEGER NOT NULL DEFAULT 0, eligible INTEGER NOT NULL DEFAULT 0, replay_done INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '')");
 	DBResultSet columns = SQL_Query(gDB, "PRAGMA table_info(jobs)");
@@ -32,10 +37,16 @@ bool Queue_SQL(const char[] query)
 
 bool Queue_Insert(const char[] id, const char[] environment, const char[] server, const char[] payload, const char[] steam2)
 {
+	RecordFilterDecision decision = Eligibility_Payload(environment, payload);
+	if (decision == RecordFilters_Unsupported)
+	{
+		Format(gLastStatus, sizeof(gLastStatus), "Skipped unsupported map/mode record %s", id);
+		return true;
+	}
 	char escaped[8192], escapedEnv[1024], query[10240];
 	gDB.Escape(payload, escaped, sizeof(escaped));
 	gDB.Escape(environment, escapedEnv, sizeof(escapedEnv));
-	Format(query, sizeof(query), "INSERT INTO jobs(id,environment,server,payload,steam2) VALUES('%s','%s','%s','%s','%s')", id, escapedEnv, server, escaped, steam2);
+	Format(query, sizeof(query), "INSERT INTO jobs(id,environment,server,payload,steam2,state) VALUES('%s','%s','%s','%s','%s','%s')", id, escapedEnv, server, escaped, steam2, decision == RecordFilters_Unknown ? "filters" : "record");
 	return Queue_SQL(query);
 }
 
@@ -49,6 +60,7 @@ void Queue_State(const char[] id, const char[] state, int next, const char[] err
 
 public Action Timer_Worker(Handle timer)
 {
+	Eligibility_PrefetchCurrent();
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		if (!IsClientInGame(client) || IsFakeClient(client)) continue;

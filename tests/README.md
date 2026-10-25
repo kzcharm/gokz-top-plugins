@@ -1,5 +1,25 @@
 # SourceMod regression probes
 
+## Record filter queue gates
+
+Compile `record_filters.sp` with the records plugin's include paths and load it
+on a dedicated csgotest server. It uses its own SQLite database and spool and
+stubs HTTP creation, so no finishes or metadata requests leave the probe. Expect
+`[record-filters-test] PASS assertions=61`, then unload and remove the probe.
+
+The checks cover exact map/course/128-tick filters, wildcard rejection, all four
+modes, NKZ/KZT sharing, NUB/PRO eligibility, persisted caches, malformed responses,
+API environment isolation, unknown-filter waits, skipping new unsupported jobs,
+pruning old rejected jobs before upload, private-spool cleanup, acknowledged-job
+preservation, and revoking stale positive filters after backend rejection.
+
+The real plugin's staging integration can be checked by inspecting the
+`record_filters` table in its existing private queue database after loading. A
+successful lookup stores a 512-character course-bit mask for the exact API/map
+pair. The probe never opens this real database.
+
+## PB announcements
+
 Compile `pb_announcements.sp` with the same project and SourceMod include paths as
 `gokz-top-core.sp`, then load it on a dedicated test server with the normal
 gokz.top dependencies installed. It exercises production PB handlers with

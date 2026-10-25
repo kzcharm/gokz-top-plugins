@@ -7,13 +7,14 @@ void HTTP_Next()
 	char legacy[37];
 	gCV_Server.GetString(legacy, sizeof(legacy));
 	if (!IsRecordUUID(legacy)) legacy[0] = '\0';
+	Eligibility_PruneQueue(environment, server, legacy);
 	if (!StrEqual(key, gAuthKey))
 	{
 		Queue_SQL("UPDATE jobs SET state=CASE WHEN canonical='' THEN 'record' ELSE 'accepted' END,next=0 WHERE state='auth'");
 		strcopy(gAuthKey, sizeof(gAuthKey), key);
 	}
 	gDB.Escape(environment, escaped, sizeof(escaped));
-	Format(query, sizeof(query), "SELECT id,payload,state,canonical,replay,upstream,attempts,eligible,replay_done FROM jobs WHERE environment='%s' AND server IN ('%s','%s') AND state IN ('record','accepted','reconcile','replay') AND next<=%d ORDER BY next,id LIMIT 1", escaped, server, legacy, GetTime());
+	Format(query, sizeof(query), "SELECT id,payload,state,canonical,replay,upstream,attempts,eligible,replay_done FROM jobs WHERE environment='%s' AND server IN ('%s','%s') AND state IN ('record','filters','accepted','reconcile','replay') AND next<=%d ORDER BY next,id LIMIT 1", escaped, server, legacy, GetTime());
 	DBResultSet rows = SQL_Query(gDB, query);
 	if (rows == null || !rows.FetchRow()) { delete rows; return; }
 	char id[37], payload[4096], state[32], canonical[37], replay[PLATFORM_MAX_PATH];
@@ -26,6 +27,14 @@ void HTTP_Next()
 	bool eligible = rows.FetchInt(7) != 0;
 	bool replayDone = rows.FetchInt(8) != 0;
 	delete rows;
+	if (StrEqual(state, "record") || StrEqual(state, "filters"))
+	{
+		RecordFilterDecision decision = Eligibility_Payload(environment, payload);
+		if (decision == RecordFilters_Unsupported) { Eligibility_Discard(id); return; }
+		if (decision == RecordFilters_Unknown) { Queue_State(id, "filters", GetTime() + 15, "Waiting for map record filters"); return; }
+		if (StrEqual(state, "filters")) Queue_State(id, "record", 0);
+		strcopy(state, sizeof(state), "record");
+	}
 	char path[256];
 	EHTTPMethod method = k_EHTTPMethodPOST;
 	strcopy(path, sizeof(path), "/v1/records");
@@ -119,6 +128,12 @@ public void OnRecordHTTPComplete(Handle request, bool failure, bool successful, 
 			}
 			body.Cleanup(); delete body;
 		}
+	}
+	else if (status == 422 && StrEqual(state, "record"))
+	{
+		char response[4096];
+		if (HTTP_ReadBody(request, response, sizeof(response)) && Eligibility_IsFilterRejection(response)) Eligibility_RejectQueued(id);
+		else Queue_State(id, "rejected", 0, gLastStatus);
 	}
 	else if (status == 401 || (status == 403 && StrEqual(state, "record"))) Queue_State(id, "auth", 0, gLastStatus);
 	else if (failure || !successful || status == 408 || status == 429 || status >= 500 || status == 0)

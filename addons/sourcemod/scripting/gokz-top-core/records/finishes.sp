@@ -33,7 +33,7 @@ void TrackFinishedPB(int client, int mode, int recordType, float runTime)
 	gPBFinish[client][bucket].oldPoints = oldPoints;
 	// Match the submission writer's millisecond serialization before comparisons.
 	char serializedTime[32];
-	Format(serializedTime, sizeof(serializedTime), "%.3f", runTime);
+	GOKZTop_FormatRecordTime(runTime, serializedTime, sizeof(serializedTime));
 	gPBFinish[client][bucket].runTime = StringToFloat(serializedTime);
 	gPBFinish[client][bucket].serial = ++gI_PBFinishSerial;
 	gPBFinish[client][bucket].active = true;

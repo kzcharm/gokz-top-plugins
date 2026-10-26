@@ -141,6 +141,16 @@ public void OnPluginStart()
 			Check(StrContains(gChat, "{red}+01.00") != -1, "NUB and PRO use the same positive-gap rule");
 		}
 	}
+	StorePB(4, Mode_KZTimer, 1, map, 36.0, 800, "2025-08-08");
+	TrackFinishedPB(4, Mode_KZTimer, 1, 35.288998);
+	float canonicalTime = gPBFinish[4][5].runTime;
+	Check(canonicalTime == 35.288, "finish matches GlobalAPI millisecond truncation");
+	Check(WakePendingPBFinish(4, Mode_KZTimer, 1, 35.288), "canonical upload acknowledgement wakes the precise finish");
+	gChat[0] = '\0';
+	HandlePBDiffResponse(4, Mode_KZTimer, 1, map, canonicalTime, 36.0, 800, true,
+		"[{\"time\":35.288,\"points\":810,\"created_on\":\"2026-10-26T00:00:00Z\"}]");
+	Check(StrContains(gChat, "{yellow}810") != -1 && StrContains(gChat, "{green}+10") != -1, "precise new PB shows accepted points and gain");
+	Check(!gPBFinish[4][5].active, "precise PB announcement completes");
 	// Simulate detecting a changed API without modifying the real server convar.
 	strcopy(gC_RecordsEnvironment, sizeof(gC_RecordsEnvironment), "https://old-environment.invalid");
 	CheckRecordsEnvironment();

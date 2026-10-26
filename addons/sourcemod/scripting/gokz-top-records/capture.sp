@@ -3,9 +3,7 @@
 // with %.3f can cross a millisecond boundary before it reaches the API.
 void Capture_FormatGlobalTime(float time, char[] output, int capacity)
 {
-	FloatToString(time, output, capacity);
-	int point = FindCharInString(output, '.');
-	if (point >= 0 && strlen(output) > point + 4) output[point + 4] = '\0';
+	GOKZTop_FormatRecordTime(time, output, capacity);
 }
 
 public void GOKZ_OnTimerStart_Post(int client, int course)

@@ -167,3 +167,11 @@ native bool GOKZTop_GetRecordsStatus(char[] buffer, int maxLength);
  */
 forward void GOKZTop_OnRecordAccepted(const char[] apiBaseURL, const char[] steamID64, const char[] mapName,
 	int course, int mode, float runTime, int teleports, const char[] recordUUID);
+
+/** GlobalAPI serializes the full float before truncating records to milliseconds. */
+stock void GOKZTop_FormatRecordTime(float time, char[] output, int capacity)
+{
+	FloatToString(time, output, capacity);
+	int point = FindCharInString(output, '.');
+	if (point >= 0 && strlen(output) > point + 4) output[point + 4] = '\0';
+}

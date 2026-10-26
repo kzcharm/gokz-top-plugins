@@ -1,3 +1,13 @@
+// GlobalAPI's JSON encoder uses FloatToString (six decimals). Its records API
+// truncates that serialized value to milliseconds. Formatting the float directly
+// with %.3f can cross a millisecond boundary before it reaches the API.
+void Capture_FormatGlobalTime(float time, char[] output, int capacity)
+{
+	FloatToString(time, output, capacity);
+	int point = FindCharInString(output, '.');
+	if (point >= 0 && strlen(output) > point + 4) output[point + 4] = '\0';
+}
+
 public void GOKZ_OnTimerStart_Post(int client, int course)
 {
 	if (!IsClientInGame(client) || IsFakeClient(client)) return;
@@ -58,7 +68,7 @@ public void GOKZ_OnTimerEnd_Post(int client, int course, float time, int telepor
 	char timestamp[40], timeString[32], payload[4096], steam2[32];
 	GetClientAuthId(client, AuthId_Steam2, steam2, sizeof(steam2));
 	FormatTime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S%z", GetTime());
-	Format(timeString, sizeof(timeString), "%.3f", time);
+	Capture_FormatGlobalTime(time, timeString, sizeof(timeString));
 	body.SetString("time", timeString);
 	body.SetString("finished_at", timestamp);
 	body.SetInt("teleports", teleportsUsed);

@@ -34,7 +34,8 @@ public void GlobalAPI_OnRequestFinished(Handle request, GlobalAPIRequestData hDa
 	if (!HTTP_ReadBody(request, response, sizeof(response))) return;
 	JSON_Object body = json_decode(response);
 	if (body == null) return;
-	int upstream = body.GetInt("id");
+	int upstream = body.GetInt("record_id");
+	if (upstream <= 0) upstream = body.GetInt("id");
 	body.Cleanup(); delete body;
 	if (upstream <= 0) return;
 	char steam[32], mode[32];
@@ -56,9 +57,10 @@ public void GlobalAPI_OnRequestFinished(Handle request, GlobalAPIRequestData hDa
 		JSON_Object run = json_decode(payload);
 		if (run == null) continue;
 		run.GetString("mode", runMode, sizeof(runMode));
-		char timeString[32]; run.GetString("time", timeString, sizeof(timeString));
+		char timeString[32], upstreamTime[32]; run.GetString("time", timeString, sizeof(timeString));
+		Capture_FormatGlobalTime(hData.GetFloat("time"), upstreamTime, sizeof(upstreamTime));
 		bool modeMatches = (StrEqual(mode, "kz_vanilla") && StrEqual(runMode, "VNL")) || (StrEqual(mode, "kz_simple") && StrEqual(runMode, "SKZ")) || (StrEqual(mode, "kz_timer") && StrEqual(runMode, "KZT"));
-		if (StrEqual(player, steam) && modeMatches && run.GetInt("stage") == hData.GetInt("stage") && run.GetInt("teleports") == hData.GetInt("teleports") && FloatAbs(StringToFloat(timeString) - hData.GetFloat("time")) < 0.0005)
+		if (StrEqual(player, steam) && modeMatches && run.GetInt("stage") == hData.GetInt("stage") && run.GetInt("teleports") == hData.GetInt("teleports") && (StrEqual(timeString, upstreamTime) || (observed[0] && FloatAbs(StringToFloat(timeString) - hData.GetFloat("time")) <= 0.0011)))
 		{
 			matches++; strcopy(match, sizeof(match), id);
 		}

@@ -62,3 +62,8 @@ restore the staging URL afterward. Quote URLs in console commands so `//` is not
 interpreted as a configuration comment. Use `sm_topreplays_status` to inspect
 scan timing and private SQLite to inspect environment-bound jobs. Unload/remove
 the probe and generated fixtures when finished; do not run it on production.
+
+`record_precision.sp` tests the records plugin against GlobalAPI float serialization,
+including the 268.601989 ->268.601 boundary, and verifies that `record_id` wakes a
+completed private SQLite job for reconciliation. Compile and load on the dedicated
+test server only; it makes no HTTP requests and never submits a run.

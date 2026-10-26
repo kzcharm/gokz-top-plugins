@@ -22,7 +22,7 @@ public Plugin myinfo =
 	name = "GOKZ Top Records",
 	author = "KZCharm",
 	description = "Durable direct records and replay uploads to gokz.top",
-	version = "1.0.1",
+	version = "1.0.2",
 	url = "https://gokz.top"
 };
 

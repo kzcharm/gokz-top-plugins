@@ -5,7 +5,7 @@
 Compile `record_filters.sp` with the records plugin's include paths and load it
 on a dedicated csgotest server. It uses its own SQLite database and spool and
 stubs HTTP creation, so no finishes or metadata requests leave the probe. Expect
-`[record-filters-test] PASS assertions=61`, then unload and remove the probe.
+`[record-filters-test] PASS assertions=71`, then unload and remove the probe.
 
 The checks cover exact map/course/128-tick filters, wildcard rejection, all four
 modes, NKZ/KZT sharing, NUB/PRO eligibility, persisted caches, malformed responses,
@@ -67,3 +67,39 @@ the probe and generated fixtures when finished; do not run it on production.
 including the 268.601989 ->268.601 boundary, and verifies that `record_id` wakes a
 completed private SQLite job for reconciliation. Compile and load on the dedicated
 test server only; it makes no HTTP requests and never submits a run.
+
+## Relay record consumer
+
+Compile `relay_records.sp` with the records plugin's include paths and load it on
+`csgotest`. It uses a private SQLite database/spool, stubs HTTP and relay
+acknowledgements, and creates no game runs or public records. Expect
+`[relay-records-test] PASS assertions=48`; unload/remove the probe afterward.
+
+It checks the relay v1 completion contract, UUIDv7/NUB/PRO classification, exact
+millisecond serialization, zero-TP queueing through PRO-only filters, cumulative anticheat evidence, malformed and legacy
+evidence rejection, optional dependency absence, UUID replay correlation and
+immutable private copies, durable completion/rejection receipts, reload-safe
+redelivery, conflicting identities, and database/queue failures without premature
+acknowledgements. The filter and precision probes additionally cover preserving
+retry/replay acknowledgements and excluding relay jobs from GlobalAPI matching.
+
+These probes do not prove checkpoint restoration or replay continuity. Validate
+those with the AXEKZ relay producer: save/resume ground and ladder checkpoints,
+repeat reconnects, finish, observe one local record and one gokz.top record, and
+verify a fresh run retains its ordinary submission behavior. Test actual settings,
+anticheat and unauthorized-manipulation failures across segments. The core timer
+must stay invalid throughout resumed runs, with no GlobalAPI record-create request.
+
+## Relay readiness and stop-save ordering
+
+`relay_lifecycle.sp` exercises production validation and relay callbacks with
+synthetic clients, cvar replies and private test cvars. It makes no HTTP requests
+or player changes. Compile/load on `csgotest`; expect
+`[relay-lifecycle-test] PASS assertions=24`, then unload/remove the probe.
+
+Checks include unresolved/in-flight/failed setting queries, known invalid values,
+stale-connection replies, both stop listener orders, resumed core invalidity,
+late sticky failures, UUID/serial/tick isolation, new-run/disconnect cleanup,
+resume eligibility restoration, no requalification after invalid values, and
+empty-evidence preservation. The producer must bound its pre-claim readiness wait
+to five seconds and retain the save when queries remain unresolved.

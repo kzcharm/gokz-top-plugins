@@ -7,6 +7,7 @@
 #undef REQUIRE_PLUGIN
 #include <gokz/replays>
 #include <gokz/anticheat>
+#include <gokz/relay>
 #include <GlobalAPI>
 #define REQUIRE_PLUGIN
 #include <gokz/top>
@@ -22,7 +23,7 @@ public Plugin myinfo =
 	name = "GOKZ Top Records",
 	author = "KZCharm",
 	description = "Durable direct records and replay uploads to gokz.top",
-	version = "1.0.2",
+	version = "1.1.0",
 	url = "https://gokz.top"
 };
 
@@ -44,6 +45,7 @@ char gModeNames[][] = {"VNL", "SKZ", "KZT", "NKZ"};
 #include "gokz-top-records/replays.sp"
 #include "gokz-top-records/reconciliation.sp"
 #include "gokz-top-records/commands.sp"
+#include "gokz-top-records/relay.sp"
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 {
@@ -65,6 +67,7 @@ public void OnPluginStart()
 	Queue_Init();
 	Eligibility_Init();
 	Validation_Init();
+	Relay_Init();
 	RegConsoleCmd("sm_topcheck", Command_Check);
 	RegConsoleCmd("sm_tc", Command_Check);
 	RegAdminCmd("sm_toprecords_queue", Command_Queue, ADMFLAG_ROOT);
@@ -84,16 +87,19 @@ public void OnMapStart()
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		gRun[client] = false;
+		Relay_ResetClient(client);
 	}
 }
 
 public void OnClientDisconnect(int client)
 {
+	Relay_ResetClient(client);
 	gRun[client] = false;
 }
 
 public void OnLibraryRemoved(const char[] name)
 {
+	Relay_OnLibraryRemoved(name);
 	if (StrEqual(name, "gokz-anticheat") || StrEqual(name, "gokz-core") || StrEqual(name, "movementapi"))
 	{
 		gFreshMap = false;

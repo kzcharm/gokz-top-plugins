@@ -44,7 +44,7 @@ public void GlobalAPI_OnRequestFinished(Handle request, GlobalAPIRequestData hDa
 	if (!steam[0] || !mode[0]) return;
 	// Only a unique captured finish can be associated. Ambiguous retries remain
 	// separate for operator review instead of merging equal-time runs.
-	DBResultSet rows = SQL_Query(gDB, "SELECT id,payload,steam2 FROM jobs WHERE upstream=0 ORDER BY id DESC");
+	DBResultSet rows = SQL_Query(gDB, "SELECT id,payload,steam2 FROM jobs WHERE upstream=0 AND relay=0 ORDER BY id DESC");
 	if (rows == null) return;
 	int matches;
 	char match[37];

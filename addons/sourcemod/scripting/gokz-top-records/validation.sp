@@ -1,5 +1,6 @@
 static char sCvars[][] = {"sv_cheats", "sv_clamp_unsafe_velocities", "mp_drop_knife_enable", "sv_autobunnyhopping", "sv_minupdaterate", "sv_maxupdaterate", "sv_mincmdrate", "sv_maxcmdrate", "sv_client_cmdrate_difference", "sv_turbophysics"};
 static float sValues[] = {0.0, 0.0, 0.0, 0.0, 128.0, 128.0, 128.0, 128.0, 0.0, 0.0};
+static bool sFPSPending[MAXPLAYERS + 1], sYawPending[MAXPLAYERS + 1];
 static bool sClientChecked[MAXPLAYERS + 1], sClientGood[MAXPLAYERS + 1], sYawChecked[MAXPLAYERS + 1], sYawGood[MAXPLAYERS + 1];
 
 void Validation_Init()
@@ -42,6 +43,8 @@ public Action OnUnsafeCommand(int client, const char[] command, int argc)
 
 public void OnClientPutInServer(int client)
 {
+	sFPSPending[client] = false;
+	sYawPending[client] = false;
 	sClientChecked[client] = false;
 	sClientGood[client] = false;
 	sYawChecked[client] = false;
@@ -50,13 +53,34 @@ public void OnClientPutInServer(int client)
 
 void QueryClientSettings(int client)
 {
-	QueryClientConVar(client, "fps_max", OnFPSChecked, GetClientSerial(client));
-	QueryClientConVar(client, "m_yaw", OnYawChecked, GetClientSerial(client));
+	if (!sFPSPending[client])
+	{
+		sFPSPending[client] = true;
+		if (QueryClientConVar(client, "fps_max", OnFPSChecked, GetClientSerial(client)) == QUERYCOOKIE_FAILED)
+		{
+			sFPSPending[client] = false;
+			sClientChecked[client] = false;
+			sClientGood[client] = false;
+			gValid[client] = false;
+		}
+	}
+	if (!sYawPending[client])
+	{
+		sYawPending[client] = true;
+		if (QueryClientConVar(client, "m_yaw", OnYawChecked, GetClientSerial(client)) == QUERYCOOKIE_FAILED)
+		{
+			sYawPending[client] = false;
+			sYawChecked[client] = false;
+			sYawGood[client] = false;
+			gValid[client] = false;
+		}
+	}
 }
 
 public void OnFPSChecked(QueryCookie cookie, int client, ConVarQueryResult result, const char[] name, const char[] value, any serial)
 {
 	if (GetClientFromSerial(serial) != client) return;
+	sFPSPending[client] = false;
 	float fps = StringToFloat(value);
 	sClientChecked[client] = result == ConVarQuery_Okay;
 	sClientGood[client] = result == ConVarQuery_Okay && (fps == 0.0 || fps >= 120.0);
@@ -66,6 +90,7 @@ public void OnFPSChecked(QueryCookie cookie, int client, ConVarQueryResult resul
 public void OnYawChecked(QueryCookie cookie, int client, ConVarQueryResult result, const char[] name, const char[] value, any serial)
 {
 	if (GetClientFromSerial(serial) != client) return;
+	sYawPending[client] = false;
 	sYawChecked[client] = result == ConVarQuery_Okay;
 	sYawGood[client] = result == ConVarQuery_Okay && FloatAbs(StringToFloat(value)) <= 0.3;
 	if (!sYawGood[client])
@@ -95,10 +120,18 @@ public void GOKZ_AC_OnPlayerSuspected(int client, ACReason reason, const char[] 
 
 public void GOKZ_OnTimerStopped(int client)
 {
+	Relay_FreezeStoppedEvidence(client);
 	gRun[client] = false;
 }
 
 bool ClientSettingsValid(int client)
 {
 	return sClientChecked[client] && sClientGood[client] && sYawChecked[client] && sYawGood[client];
+}
+
+// Successful replies can contain ineligible values. Transport failures remain
+// unresolved and let the producer's bounded pre-claim wait preserve the save.
+bool ClientSettingsResolved(int client)
+{
+	return sClientChecked[client] && sYawChecked[client] && !sFPSPending[client] && !sYawPending[client];
 }

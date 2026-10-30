@@ -62,7 +62,7 @@ public Action GOKZ_RP_OnReplaySaved(int client, int replayType, const char[] map
 	if (!valid || mode < 0 || mode > 3 || account <= 0) return Plugin_Continue;
 	char steam[32];
 	Format(steam, sizeof(steam), "STEAM_1:%d:%d", account & 1, account / 2);
-	DBResultSet rows = SQL_Query(gDB, "SELECT id,payload,steam2 FROM jobs WHERE replay='' AND state NOT IN ('done','rejected') ORDER BY id");
+	DBResultSet rows = SQL_Query(gDB, "SELECT id,payload,steam2 FROM jobs WHERE replay='' AND relay=0 AND state NOT IN ('done','rejected') ORDER BY id");
 	if (rows == null) return Plugin_Continue;
 	int matches;
 	char match[37];

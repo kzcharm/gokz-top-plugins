@@ -59,8 +59,8 @@ public void OnPluginStart()
 	gDB = SQLite_UseDatabase("gokz-top-record-precision-tests", error, sizeof(error));
 	Check(gDB != null, "private SQLite");
 	Queue_SQL("DROP TABLE IF EXISTS jobs");
-	Queue_SQL("CREATE TABLE jobs(id TEXT PRIMARY KEY,payload TEXT,steam2 TEXT,upstream INTEGER DEFAULT 0,canonical TEXT,state TEXT,next INTEGER)");
-	Queue_SQL("INSERT INTO jobs VALUES('01900000-0000-7000-8000-000000000001','{\"mode\":\"KZT\",\"stage\":0,\"teleports\":0,\"time\":\"35.288\"}','STEAM_1:0:123',0,'01900000-0000-7000-8000-000000000001','done',0)");
+	Queue_CreateTables();
+	Queue_SQL("INSERT INTO jobs(id,environment,server,payload,steam2,canonical,state) VALUES('01900000-0000-7000-8000-000000000001','','','{\"mode\":\"KZT\",\"stage\":0,\"teleports\":0,\"time\":\"35.288\"}','STEAM_1:0:123','01900000-0000-7000-8000-000000000001','done')");
 	GlobalAPIRequestData data = new GlobalAPIRequestData();
 	data.RequestType = GlobalAPIRequestType_POST;
 	data.Status = 200;
@@ -76,6 +76,15 @@ public void OnPluginStart()
 	Check(rows.FetchInt(0) == 123456, "record_id captured");
 	char state[32]; rows.FetchString(1, state, sizeof(state));
 	Check(StrEqual(state, "reconcile"), "completed job wakes for identity reconciliation");
+	delete rows;
+	// Relay jobs must never attach an unrelated upstream record with equal stats.
+	Queue_SQL("UPDATE jobs SET upstream=0,state='done',relay=1");
+	GlobalAPI_OnRequestFinished(view_as<Handle>(124), data);
+	rows = SQL_Query(gDB, "SELECT upstream,state FROM jobs");
+	Check(rows != null && rows.FetchRow(), "relay job retained");
+	Check(rows.FetchInt(0) == 0, "relay excluded from heuristic upstream matching");
+	rows.FetchString(1, state, sizeof(state));
+	Check(StrEqual(state, "done"), "relay queue state untouched by upstream response");
 	delete rows;
 	data.Cleanup(); delete data;
 	PrintToServer("[record-precision-test] PASS assertions=%d", sAssertions);

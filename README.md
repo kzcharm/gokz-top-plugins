@@ -112,3 +112,45 @@ AMTL_SDK=/path/to/sourcemod/public/amtl \
 The build uses a multilib C++ compiler for CS:GO's 32-bit Linux runtime. Do not
 substitute SourcePawn master headers for the SDK's pinned revision: their native
 context ABI can differ. Release archives include the compiled helper.
+
+## Optional relay records
+
+`gokz-top-records` 1.1.0 consumes the optional AXEKZ `gokz/relay.inc` v1 API.
+A compatible relay producer owns safe-position/checkpoint save/resume and replay continuity;
+this package only supplies the gokz.top consumer. Core, global and anticheat
+plugins do not need changes for this consumer.
+
+The consumer captures versioned cumulative validation evidence at every save and
+completion. Relay persists that opaque evidence and the stable run UUIDv7 across
+reconnects. Missing evidence and earlier integrity failures cannot qualify for
+rankings. Expected core invalidity is exempted only for a matching relay-owned
+resumed session; settings, anticheat, mode/style and producer integrity checks
+remain enforced. API environment/server identity must match at resume.
+
+Dedicated completion delivery uses immutable metadata and does not require a
+connected client or the ordinary timer-end event. Valid finishes use normal NUB/PRO
+ranking/filter/replay policies and the existing durable upload queue. Identical
+redeliveries preserve queue state; conflicting UUID reuse is rejected. Delivery
+is acknowledged after queueing or a durable rejection, independently of HTTP
+acceptance. `relay_receipts` is in the existing records SQLite database and must
+be included in its backup. The relay producer's snapshots/completions use its own
+PostgreSQL storage.
+
+Replay delivery correlates by UUID, with `_runs/<map>/<uuid>.replay` discovery
+recovering missed callbacks. Relay jobs are excluded from heuristic GlobalAPI
+identity attachment. Ordinary fresh runs and queued jobs continue when relay is
+absent; unloading relay invalidates active consumer sessions. See
+`tests/README.md` for isolated probes and required producer gameplay checks.
+
+Relay checks `GOKZ_Relay_OnResumeCheck` before claiming a save. The consumer waits
+for client-setting queries to finish; pending/failed requests keep readiness
+blocked for the producer's bounded five-second wait. Successfully queried but
+ineligible values allow gameplay and keep ranked submission disabled. Stop saves
+retain final evidence for the matching UUID/client serial during the synchronous
+stop tick, so listener order cannot erase it. New runs and disconnects clear that
+handoff, and later integrity failures cannot restore eligibility.
+
+Validated safe-position resumes can preserve zero teleports and qualify through
+ordinary PRO or NUB filters. Checkpoint fallback adds one teleport. The consumer
+rejects negative counts and never infers integrity from a zero teleport count;
+all cumulative evidence and relay-owned eligibility checks still apply.

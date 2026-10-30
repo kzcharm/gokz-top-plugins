@@ -108,6 +108,18 @@ public void OnPluginStart()
 	Check(Jobs() == 0, "unsupported finish is never queued");
 	Check(Queue_Insert(id2, gTestEnvironment, gTestServer, supported, ""), "supported finish queued");
 	CheckState(id2, "record");
+	Queue_SQL("UPDATE jobs SET state='accepted',attempts=3,next=123,canonical=id,eligible=1,replay_done=1");
+	Check(Queue_Insert(id2, gTestEnvironment, gTestServer, supported, ""), "identical completion redelivery acknowledged");
+	CheckState(id2, "accepted");
+	DBResultSet duplicate = SQL_Query(gDB, "SELECT attempts,next,eligible,replay_done FROM jobs");
+	Check(duplicate != null && duplicate.FetchRow(), "duplicate job readable");
+	Check(duplicate.FetchInt(0) == 3 && duplicate.FetchInt(1) == 123 && duplicate.FetchInt(2) == 1 && duplicate.FetchInt(3) == 1, "duplicate retains retry and replay acknowledgements");
+	delete duplicate;
+	Check(!Queue_Insert(id2, "https://wrong.invalid", gTestServer, supported, ""), "UUID cannot move API environments");
+	Check(!Queue_Insert(id2, gTestEnvironment, gTestServer, unsupported, ""), "UUID cannot replace completion stats");
+	Check(!Queue_Insert(id2, gTestEnvironment, gTestServer, supported, "", true), "UUID cannot change origin");
+	Queue_CreateTables();
+	CheckState(id2, "accepted");
 	Queue_SQL("DELETE FROM jobs");
 	Check(Queue_Insert(id3, "https://other-environment.invalid", gTestServer, unsupported, ""), "unknown environment retains finish");
 	CheckState(id3, "filters");

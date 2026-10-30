@@ -12,6 +12,25 @@
 #define GOKZ_Relay_AcknowledgeCompletion TestAcknowledge
 #define SteamWorks_CreateHTTPRequest TestCreateRequest
 #define GOKZTop_GetHTTPConfig TestHTTPConfig
+// Keep included production forwards private to this probe; real events must
+// never enter synthetic fixtures, even while another test is running.
+#define GOKZ_Relay_OnCaptureEvidence ProbeRelayRecords_GOKZ_Relay_OnCaptureEvidence
+#define GOKZ_Relay_OnResume ProbeRelayRecords_GOKZ_Relay_OnResume
+#define GOKZ_Relay_OnResumeCheck ProbeRelayRecords_GOKZ_Relay_OnResumeCheck
+#define GOKZ_Relay_OnCompleted ProbeRelayRecords_GOKZ_Relay_OnCompleted
+#define GOKZ_Relay_OnReplaySaved ProbeRelayRecords_GOKZ_Relay_OnReplaySaved
+#define GOKZ_OnTimerStart_Post ProbeRelayRecords_GOKZ_OnTimerStart_Post
+#define GOKZ_OnTimerEnd_Post ProbeRelayRecords_GOKZ_OnTimerEnd_Post
+#define GOKZ_OnTimerStopped ProbeRelayRecords_GOKZ_OnTimerStopped
+#define GOKZ_AC_OnPlayerSuspected ProbeRelayRecords_GOKZ_AC_OnPlayerSuspected
+#define GOKZ_OnOptionChanged ProbeRelayRecords_GOKZ_OnOptionChanged
+#define GOKZ_OnModeUnloaded ProbeRelayRecords_GOKZ_OnModeUnloaded
+#define GOKZ_RP_OnReplaySaved ProbeRelayRecords_GOKZ_RP_OnReplaySaved
+#define GlobalAPI_OnRequestStarted ProbeRelayRecords_GlobalAPI_OnRequestStarted
+#define GlobalAPI_OnRequestFinished ProbeRelayRecords_GlobalAPI_OnRequestFinished
+#define OnClientPutInServer ProbeRelayRecords_OnClientPutInServer
+#define OnClientDisconnect ProbeRelayRecords_OnClientDisconnect
+#define OnLibraryRemoved ProbeRelayRecords_OnLibraryRemoved
 #include "../addons/sourcemod/scripting/gokz-top-records.sp"
 #undef OnPluginStart
 
@@ -19,8 +38,8 @@ int sAssertions, sAcks, sRequests;
 bool sAvailable = true;
 char sID[] = "01900000-0000-7000-8000-000000000001";
 char sEnvironment[] = "https://relay-records.invalid";
-char sCompletion[] = "{\"version\":1,\"run_id\":\"01900000-0000-7000-8000-000000000001\",\"steamid64\":\"76561197960265974\",\"map_name\":\"relay_test\",\"course\":0,\"mode\":2,\"style\":0,\"time_ms\":123456,\"teleports\":1,\"finished_at\":1793384000,\"eligible\":true}";
-char sEvidence[] = "{\"evidence_version\":1,\"run_id\":\"01900000-0000-7000-8000-000000000001\",\"steamid64\":\"76561197960265974\",\"steam2\":\"STEAM_1:0:123\",\"server_id\":\"85568392936085241\",\"environment\":\"https://relay-records.invalid\",\"map_name\":\"relay_test\",\"bsp_size\":12345,\"stage\":0,\"mode\":\"KZT\",\"style\":0,\"mode_version\":2172,\"tickrate\":128,\"integrity\":{\"fresh_map\":true,\"server_settings\":true,\"client_settings\":true,\"required_plugins\":true,\"timer_valid\":true,\"mode_stable\":true,\"anticheat_clear\":true}}";
+char sCompletion[] = "{\"version\":2,\"run_id\":\"01900000-0000-7000-8000-000000000001\",\"steamid64\":\"76561197960265974\",\"map_name\":\"relay_test\",\"course\":0,\"mode\":2,\"style\":0,\"time_ms\":123456,\"teleports\":1,\"finished_at\":1793384000,\"eligible\":true}";
+char sEvidence[] = "{\"evidence_version\":2,\"run_id\":\"01900000-0000-7000-8000-000000000001\",\"steamid64\":\"76561197960265974\",\"steam2\":\"STEAM_1:0:123\",\"server_id\":\"85568392936085241\",\"environment\":\"https://relay-records.invalid\",\"map_name\":\"relay_test\",\"bsp_size\":12345,\"stage\":0,\"mode\":\"KZT\",\"style\":0,\"mode_version\":2172,\"tickrate\":128,\"integrity\":{\"fresh_map\":true,\"server_settings\":true,\"client_settings\":true,\"required_plugins\":true,\"timer_valid\":true,\"mode_stable\":true,\"anticheat_clear\":true}}";
 
 bool TestLibraryExists(const char[] name) { return sAvailable && name[0] != '\0'; }
 FeatureStatus TestFeatureStatus(FeatureType type, const char[] name) { return type == FeatureType_Native && name[0] ? FeatureStatus_Available : FeatureStatus_Unavailable; }
@@ -72,7 +91,7 @@ public void OnPluginStart()
 	Queue_CreateTables(); Eligibility_Init(); Relay_Init();
 	int flags[256]; flags[0] = 1 << 4; // KZT NUB only; resumed finishes have teleports.
 	Eligibility_Store(sEnvironment, "relay_test", flags);
-	Check(!Relay_CoreInvalidityExpected(1), "ordinary session never bypasses core invalidity");
+	Check(!Relay_OwnedSession(1), "ordinary session never bypasses core invalidity");
 	Check(Relay_UUID(sID) && !Relay_UUID("01900000-0000-4000-8000-000000000001"), "UUIDv7 required");
 	Check(!Relay_UUID("01900000-0000-7000-0000-000000000001"), "UUID variant required");
 	JSON_Object completion = json_decode(sCompletion), saved = json_decode(sEvidence);
@@ -82,12 +101,23 @@ public void OnPluginStart()
 	Check(StrEqual(time, "123.456") && body.GetInt("teleports") == 1, "exact milliseconds and TP count");
 	Check(!body.HasKey("evidence_version") && !body.HasKey("environment") && !body.HasKey("run_id"), "private evidence excluded from record API");
 	body.Cleanup(); delete body;
-	RejectMutation("version", 2); RejectMutation("course", 1); RejectMutation("mode", 1); RejectMutation("style", 1);
+	RejectMutation("version", 1); RejectMutation("course", 1); RejectMutation("mode", 1); RejectMutation("style", 1);
 	RejectMutation("time_ms", 0); RejectMutation("teleports", -1); RejectMutation("finished_at", 0);
 	JSON_Object integrity = saved.GetObject("integrity"); integrity.SetBool("anticheat_clear", false);
 	body = Relay_Record(completion, saved); Check(body == null, "earlier anticheat failure cannot regain eligibility");
 	integrity.SetBool("anticheat_clear", true); saved.Remove("stage");
 	body = Relay_Record(completion, saved); Check(body == null, "incomplete evidence rejected");
+	completion.Cleanup(); delete completion; saved.Cleanup(); delete saved;
+	completion = json_decode(sCompletion); saved = json_decode(sEvidence);
+	saved.SetInt("evidence_version", 1);
+	body = Relay_Record(completion, saved); Check(body == null, "legacy evidence cannot claim v2 completion semantics");
+	completion.SetInt("version", 1);
+	body = Relay_Record(completion, saved);
+	Check(body != null, "legitimate pending v1 completion remains processable"); body.Cleanup(); delete body;
+	char legacyCompletion[4096], legacyEvidence[4096];
+	json_encode(completion, legacyCompletion, sizeof(legacyCompletion)); json_encode(saved, legacyEvidence, sizeof(legacyEvidence));
+	GOKZ_Relay_OnCompleted(legacyCompletion, legacyEvidence);
+	Check(sAcks == 1 && Count("jobs") == 1, "pending legacy completion durably queued without live client or v2 runtime"); Reset();
 	completion.Cleanup(); delete completion; saved.Cleanup(); delete saved;
 
 	completion = json_decode(sCompletion); saved = json_decode(sEvidence);

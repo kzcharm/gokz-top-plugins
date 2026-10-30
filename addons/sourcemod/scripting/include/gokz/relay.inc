@@ -3,7 +3,7 @@
 #endif
 #define _gokz_relay_included
 
-#define GOKZ_RELAY_API_VERSION 1
+#define GOKZ_RELAY_API_VERSION 2
 #define GOKZ_RELAY_EVIDENCE_MAX 4096
 
 /** Capture gokz.top-owned, versioned cumulative integrity evidence before each
@@ -18,20 +18,24 @@ forward void GOKZ_Relay_OnCaptureEvidence(int client, char[] evidence, int maxle
 forward Action GOKZ_Relay_OnResumeCheck(int client);
 
 /** Successful resume, after timer/checkpoints/replay are restored. Core timer
- * validity remains false. Evidence is the exact opaque string from the save.
+ * validity is true in API v2; genuine invalidations still disqualify the run. Evidence is the exact opaque string from the save.
  * eligible describes relay's independent validation, not gokz.top validation. */
 forward void GOKZ_Relay_OnResume(int client, const char[] runID, const char[] evidence, bool eligible);
 
 /** Durable completion delivery; may repeat across reloads or without a client.
- * JSON v1 fields: version (1), run_id (UUIDv7), steamid64 (string), map_name,
+ * JSON fields: version (1 legacy, 2 core-valid completion), run_id (UUIDv7), steamid64 (string), map_name,
  * course, mode, style, time_ms, teleports, finished_at (Unix seconds), eligible
  * (bool). All fields and evidence are immutable. Acknowledge ONLY after durable
  * processing, including a durable rejection. consumer: "localdb" or "gokz.top".
- * Never dispatch ordinary GOKZ_OnTimerEnd_Post for these completions. */
+ * API v2 uses real core finish events. Consumers must skip ordinary record capture
+ * for restored/resumed sessions; this durable event owns record delivery. */
 forward void GOKZ_Relay_OnCompleted(const char[] completionJson, const char[] evidence);
 
 /** Immutable replay filename for a logical run; delivery may repeat. */
 forward void GOKZ_Relay_OnReplaySaved(const char[] runID, const char[] filePath);
+
+/** Runtime semantics negotiation; optional for legacy v1 producers. */
+native int GOKZ_Relay_GetAPIVersion();
 
 native bool GOKZ_Relay_IsResumed(int client);
 native bool GOKZ_Relay_IsRestoring(int client);
@@ -53,6 +57,7 @@ public SharedPlugin __pl_gokz_relay =
 #if !defined REQUIRE_PLUGIN
 public void __pl_gokz_relay_SetNTVOptional()
 {
+ MarkNativeAsOptional("GOKZ_Relay_GetAPIVersion");
  MarkNativeAsOptional("GOKZ_Relay_IsResumed");
  MarkNativeAsOptional("GOKZ_Relay_IsRestoring");
  MarkNativeAsOptional("GOKZ_Relay_IsEligible");

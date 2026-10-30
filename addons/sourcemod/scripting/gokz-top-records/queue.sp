@@ -88,7 +88,7 @@ public Action Timer_Worker(Handle timer)
 	{
 		if (!IsClientInGame(client) || IsFakeClient(client)) continue;
 		QueryClientSettings(client);
-		if (gRun[client] && ((!GOKZ_GetValidTimer(client) && !Relay_CoreInvalidityExpected(client)) || !ServerSettingsValid())) gValid[client] = false;
+		if (gRun[client] && (!GOKZ_GetValidTimer(client) || !ServerSettingsValid())) gValid[client] = false;
 	}
 	DiscoverReplays();
 	if (!gBusy) HTTP_Next();

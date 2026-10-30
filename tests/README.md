@@ -73,9 +73,9 @@ test server only; it makes no HTTP requests and never submits a run.
 Compile `relay_records.sp` with the records plugin's include paths and load it on
 `csgotest`. It uses a private SQLite database/spool, stubs HTTP and relay
 acknowledgements, and creates no game runs or public records. Expect
-`[relay-records-test] PASS assertions=48`; unload/remove the probe afterward.
+`[relay-records-test] PASS assertions=52`; unload/remove the probe afterward.
 
-It checks the relay v1 completion contract, UUIDv7/NUB/PRO classification, exact
+It checks the relay v1/v2 completion contracts, UUIDv7/NUB/PRO classification, exact
 millisecond serialization, zero-TP queueing through PRO-only filters, cumulative anticheat evidence, malformed and legacy
 evidence rejection, optional dependency absence, UUID replay correlation and
 immutable private copies, durable completion/rejection receipts, reload-safe
@@ -87,19 +87,29 @@ These probes do not prove checkpoint restoration or replay continuity. Validate
 those with the AXEKZ relay producer: save/resume ground and ladder checkpoints,
 repeat reconnects, finish, observe one local record and one gokz.top record, and
 verify a fresh run retains its ordinary submission behavior. Test actual settings,
-anticheat and unauthorized-manipulation failures across segments. The core timer
-must stay invalid throughout resumed runs, with no GlobalAPI record-create request.
+anticheat and unauthorized-manipulation failures across segments. API v2 must keep the core timer valid and finish through real core end hooks,
+with no GlobalAPI record-create request.
 
 ## Relay readiness and stop-save ordering
 
 `relay_lifecycle.sp` exercises production validation and relay callbacks with
 synthetic clients, cvar replies and private test cvars. It makes no HTTP requests
 or player changes. Compile/load on `csgotest`; expect
-`[relay-lifecycle-test] PASS assertions=24`, then unload/remove the probe.
+`[relay-lifecycle-test] PASS assertions=40`, then unload/remove the probe.
 
 Checks include unresolved/in-flight/failed setting queries, known invalid values,
-stale-connection replies, both stop listener orders, resumed core invalidity,
+stale-connection replies, both stop listener orders, real core validity and genuine invalidation,
 late sticky failures, UUID/serial/tick isolation, new-run/disconnect cleanup,
 resume eligibility restoration, no requalification after invalid values, and
 empty-evidence preservation. The producer must bound its pre-claim readiness wait
 to five seconds and retain the save when queries remain unresolved.
+
+The v2 lifecycle probe also checks internal real-start suppression, archived
+failures, both normal post-end listener orders without duplicate jobs, missing or
+mismatched evidence, old/missing runtime API refusal for live eligibility, legacy
+snapshot migration, and unchanged ordinary fresh-run submission. Completion tests
+cover retained pending v1 processing as well as strict v2 evidence matching.
+
+Record probes rename included production forwards so live relay/core/replay and
+GlobalAPI events cannot enter their synthetic fixtures. Keep probes unloaded
+outside their own checks, and remove their binaries before gameplay validation.

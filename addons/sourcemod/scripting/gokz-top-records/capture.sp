@@ -9,6 +9,13 @@ void Capture_FormatGlobalTime(float time, char[] output, int capacity)
 public void GOKZ_OnTimerStart_Post(int client, int course)
 {
 	if (!IsClientInGame(client) || IsFakeClient(client)) return;
+	if (Relay_IsRestoring(client))
+	{
+		// The producer will restore the archived UUID and cumulative evidence.
+		// A real internal core start is not a fresh logical run.
+		gRun[client] = false;
+		return;
+	}
 	Relay_ResetClient(client);
 	int mode = GOKZ_GetCoreOption(client, Option_Mode);
 	gRun[client] = mode >= 0 && mode <= 3 && GOKZ_GetCoreOption(client, Option_Style) == 0;
@@ -61,7 +68,7 @@ JSON_Object Capture_Check(int client, int course)
 
 public void GOKZ_OnTimerEnd_Post(int client, int course, float time, int teleportsUsed)
 {
-	if (!gRun[client] || Relay_CoreInvalidityExpected(client)) return;
+	if (!gRun[client] || Relay_SuppressOrdinaryCapture(client)) return;
 	JSON_Object body = Capture_Check(client, course);
 	if (body == null) return;
 	char timestamp[40], timeString[32], payload[4096], steam2[32];

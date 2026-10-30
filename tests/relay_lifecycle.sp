@@ -30,13 +30,36 @@
 #define GOKZ_GetCourse TestCourse
 #define GOKZ_GetValidTimer TestValidTimer
 #define GOKZ_Relay_IsResumed TestResumed
+#define GOKZ_Relay_IsRestoring TestRestoring
 #define GOKZ_Relay_IsEligible TestEligible
 #define GOKZ_Relay_GetRunID TestRunID
+#define GOKZ_Relay_GetAPIVersion TestAPIVersion
+#define SteamWorks_CreateHTTPRequest TestCreateRequest
+// Keep included production forwards private to this probe; real events must
+// never enter synthetic fixtures, even while another test is running.
+#define GOKZ_Relay_OnCaptureEvidence ProbeRelayLifecycle_GOKZ_Relay_OnCaptureEvidence
+#define GOKZ_Relay_OnResume ProbeRelayLifecycle_GOKZ_Relay_OnResume
+#define GOKZ_Relay_OnResumeCheck ProbeRelayLifecycle_GOKZ_Relay_OnResumeCheck
+#define GOKZ_Relay_OnCompleted ProbeRelayLifecycle_GOKZ_Relay_OnCompleted
+#define GOKZ_Relay_OnReplaySaved ProbeRelayLifecycle_GOKZ_Relay_OnReplaySaved
+#define GOKZ_OnTimerStart_Post ProbeRelayLifecycle_GOKZ_OnTimerStart_Post
+#define GOKZ_OnTimerEnd_Post ProbeRelayLifecycle_GOKZ_OnTimerEnd_Post
+#define GOKZ_OnTimerStopped ProbeRelayLifecycle_GOKZ_OnTimerStopped
+#define GOKZ_AC_OnPlayerSuspected ProbeRelayLifecycle_GOKZ_AC_OnPlayerSuspected
+#define GOKZ_OnOptionChanged ProbeRelayLifecycle_GOKZ_OnOptionChanged
+#define GOKZ_OnModeUnloaded ProbeRelayLifecycle_GOKZ_OnModeUnloaded
+#define GOKZ_RP_OnReplaySaved ProbeRelayLifecycle_GOKZ_RP_OnReplaySaved
+#define GlobalAPI_OnRequestStarted ProbeRelayLifecycle_GlobalAPI_OnRequestStarted
+#define GlobalAPI_OnRequestFinished ProbeRelayLifecycle_GlobalAPI_OnRequestFinished
+#define OnClientPutInServer ProbeRelayLifecycle_OnClientPutInServer
+#define OnClientDisconnect ProbeRelayLifecycle_OnClientDisconnect
+#define OnLibraryRemoved ProbeRelayLifecycle_OnLibraryRemoved
 #include "../addons/sourcemod/scripting/gokz-top-records.sp"
 #undef OnPluginStart
 
-int sAssertions, sSerial = 100, sTick = 20, sQueries;
-bool sInGame = true, sCoreValid = true, sResumed, sEligible = true, sQueryFails;
+int sAssertions, sSerial = 100, sTick = 20, sQueries, sAPIVersion = 2;
+bool sVersionNative = true;
+bool sInGame = true, sCoreValid = true, sResumed, sRestoring, sEligible = true, sQueryFails;
 ConVar sTestCVars[10];
 char sSettingNames[][] = {"sv_cheats", "sv_clamp_unsafe_velocities", "mp_drop_knife_enable", "sv_autobunnyhopping", "sv_minupdaterate", "sv_maxupdaterate", "sv_mincmdrate", "sv_maxcmdrate", "sv_client_cmdrate_difference", "sv_turbophysics"};
 float sSettingValues[] = {0.0, 0.0, 0.0, 0.0, 128.0, 128.0, 128.0, 128.0, 0.0, 0.0};
@@ -44,7 +67,7 @@ char sID[] = "01900000-0000-7000-8000-000000000001";
 char sCurrentID[37];
 
 bool TestLibrary(const char[] name) { return name[0] != 0; }
-FeatureStatus TestFeature(FeatureType type, const char[] name) { return type == FeatureType_Native && name[0] && !StrEqual(name, "GOKZ_DB_GetRunGUID") ? FeatureStatus_Available : FeatureStatus_Unavailable; }
+FeatureStatus TestFeature(FeatureType type, const char[] name) { return type == FeatureType_Native && name[0] && !StrEqual(name, "GOKZ_DB_GetRunGUID") && (sVersionNative || !StrEqual(name, "GOKZ_Relay_GetAPIVersion")) ? FeatureStatus_Available : FeatureStatus_Unavailable; }
 bool TestInGame(int client) { return client == 1 && sInGame; }
 bool TestFake(int client) { return client != 1; }
 int TestSerial(int client) { return client == 1 ? sSerial : 0; }
@@ -76,9 +99,22 @@ int TestOption(int client, Option option) { return client == 1 && option == Opti
 int TestModeVersion(int mode) { return mode == 2 ? 2172 : 0; }
 int TestCourse(int client) { return client == 1 ? 0 : -1; }
 bool TestValidTimer(int client) { return client == 1 && sCoreValid; }
+int TestAPIVersion() { return sAPIVersion; }
+bool TestRestoring(int client) { return client == 1 && sRestoring; }
 bool TestResumed(int client) { return client == 1 && sResumed; }
 bool TestEligible(int client) { return client == 1 && sEligible; }
 bool TestRunID(int client, char[] id, int capacity) { strcopy(id, capacity, sCurrentID); return client == 1; }
+Handle TestCreateRequest(EHTTPMethod method, const char[] url)
+{
+	SetFailState("Unexpected lifecycle HTTP request method=%d URL=%s", method, url);
+	return null;
+}
+int Jobs()
+{
+	DBResultSet rows = SQL_Query(gDB, "SELECT count(*) FROM jobs");
+	if (rows == null || !rows.FetchRow()) SetFailState("Cannot read isolated lifecycle jobs");
+	int count = rows.FetchInt(0); delete rows; return count;
+}
 void Check(bool condition, const char[] label) { if (!condition) SetFailState("relay-lifecycle-test: %s", label); sAssertions++; }
 void Replies(ConVarQueryResult result, const char[] fps = "300", const char[] yaw = "0.022")
 {
@@ -92,7 +128,7 @@ void Fresh()
 	strcopy(sCurrentID, sizeof(sCurrentID), sID); strcopy(gGUID[1], sizeof(gGUID[]), sID);
 	strcopy(gEnvironment[1], sizeof(gEnvironment[]), "https://relay-test.invalid");
 	strcopy(gServer[1], sizeof(gServer[]), "85568392936085241");
-	sResumed = false; sCoreValid = true; sEligible = true;
+	sResumed = false; sRestoring = false; sCoreValid = true; sEligible = true;
 }
 bool EvidenceValid(const char[] evidence)
 {
@@ -101,6 +137,11 @@ bool EvidenceValid(const char[] evidence)
 }
 public void OnPluginStart()
 {
+	char error[256]; gDB = SQLite_UseDatabase("gokz-top-relay-lifecycle-tests", error, sizeof(error));
+	Check(gDB != null, "private lifecycle database");
+	Queue_SQL("DROP TABLE IF EXISTS jobs"); Queue_SQL("DROP TABLE IF EXISTS record_filters");
+	Queue_CreateTables(); Eligibility_Init();
+	int flags[256]; flags[0] = 3 << 4; Eligibility_Store("https://relay-test.invalid", "relay_test", flags);
 	for (int i = 0; i < sizeof(sSettingNames); i++)
 	{
 		char name[64], value[32]; Format(name, sizeof(name), "relay_lifecycle_test_setting_%d", i);
@@ -136,9 +177,9 @@ public void OnPluginStart()
 	Fresh(); gValid[1] = false; GOKZ_OnTimerStopped(1); GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
 	Check(after[0] && !EvidenceValid(after), "invalid run remains invalid through stop handoff");
 	Fresh(); GOKZ_Relay_OnCaptureEvidence(1, before, sizeof(before));
-	sResumed = true; sCoreValid = false; GOKZ_Relay_OnResume(1, sID, before, true);
+	sResumed = true; sCoreValid = true; GOKZ_Relay_OnResume(1, sID, before, true);
 	GOKZ_OnTimerStopped(1); GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
-	Check(EvidenceValid(after), "owned resumed stop preserves deliberate core invalidity exception");
+	Check(EvidenceValid(after), "owned core-valid resumed stop preserves evidence");
 	sCurrentID[35] = '2'; GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
 	Check(!after[0], "different logical run cannot consume final evidence");
 	strcopy(sCurrentID, sizeof(sCurrentID), sID); sSerial++; GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
@@ -153,9 +194,9 @@ public void OnPluginStart()
 	Fresh(); GOKZ_OnTimerStopped(1); OnClientDisconnect(1); GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
 	Check(!after[0], "actual disconnect clears final evidence");
 	Fresh(); GOKZ_Relay_OnCaptureEvidence(1, before, sizeof(before));
-	gRun[1] = false; sResumed = true; sCoreValid = false;
+	gRun[1] = false; sResumed = true; sCoreValid = true;
 	GOKZ_Relay_OnResume(1, sID, before, true);
-	Check(gRun[1] && gValid[1] && Relay_CoreInvalidityExpected(1), "resolved reconnect resume restores cumulative eligibility");
+	Check(gRun[1] && gValid[1] && Relay_OwnedSession(1), "resolved reconnect resume restores cumulative eligibility");
 	Replies(ConVarQuery_Okay, "30", "1");
 	GOKZ_Relay_OnResume(1, sID, before, true);
 	Check(gRun[1] && !gValid[1], "known ineligible values cannot regain eligibility on resume");
@@ -164,5 +205,57 @@ public void OnPluginStart()
 	GOKZ_Relay_OnResume(1, sID, "", true);
 	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
 	Check(!gRun[1] && !gValid[1] && !after[0], "empty evidence never gains eligibility or frozen fallback");
+	// Restoration starts cannot replace an archived failure with fresh validity.
+	Fresh(); gValid[1] = false; GOKZ_Relay_OnCaptureEvidence(1, before, sizeof(before));
+	sRestoring = true; GOKZ_OnTimerStart_Post(1, 0);
+	Check(!gRun[1] && !gValid[1] && StrEqual(gGUID[1], sID), "internal start preserves identity and never initializes fresh capture");
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(!after[0], "internal restoring window cannot mint validation evidence");
+	GOKZ_OnTimerEnd_Post(1, 0, 12.0, 0);
+	Check(Jobs() == 0, "internal restoring window cannot queue an ordinary finish");
+	sRestoring = false; sResumed = true; GOKZ_Relay_OnResume(1, sID, before, true);
+	Check(gRun[1] && !gValid[1], "archived failed evidence survives real restoration start");
+	Fresh(); GOKZ_Relay_OnCaptureEvidence(1, before, sizeof(before));
+	sRestoring = true; GOKZ_OnTimerStart_Post(1, 0); sRestoring = false; sResumed = true;
+	GOKZ_Relay_OnResume(1, sID, before, true);
+	GOKZ_OnTimerEnd_Post(1, 0, 12.0, 0);
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(Jobs() == 0 && gRun[1] && EvidenceValid(after), "ordinary post-end before producer preserves evidence and queues nothing");
+	strcopy(before, sizeof(before), after);
+	GOKZ_OnTimerEnd_Post(1, 0, 12.0, 0);
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(Jobs() == 0 && StrEqual(before, after), "ordinary post-end after producer cannot duplicate or erase evidence");
+	sCoreValid = false; GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(!gValid[1] && !EvidenceValid(after), "genuine core invalidation poisons owned resumed run");
+	GOKZ_OnTimerStopped(1); GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(after[0] && !EvidenceValid(after), "core invalidation remains failed in stop handoff");
+	Fresh(); GOKZ_Relay_OnCaptureEvidence(1, before, sizeof(before)); sResumed = true; sCoreValid = false;
+	GOKZ_Relay_OnResume(1, sID, before, true);
+	Check(gRun[1] && !gValid[1], "old core-invalid producer cannot qualify a restored session");
+	Fresh(); sResumed = true; GOKZ_Relay_OnResume(1, sID, "", true);
+	gRun[1] = true; GOKZ_OnTimerEnd_Post(1, 0, 12.0, 0);
+	Check(Jobs() == 0, "producer-owned session with no evidence never falls through ordinary upload");
+	Fresh(); GOKZ_Relay_OnCaptureEvidence(1, before, sizeof(before)); sResumed = true;
+	GOKZ_Relay_OnResume(1, sID, before, true); sCurrentID[35] = '2';
+	GOKZ_OnTimerEnd_Post(1, 0, 12.0, 0);
+	Check(Jobs() == 0, "mismatched relay identity cannot fall through ordinary upload");
+	// Archive schema v1 can migrate only through a fresh core-valid v2 resume.
+	Fresh(); GOKZ_Relay_OnCaptureEvidence(1, before, sizeof(before));
+	JSON_Object legacy = json_decode(before); legacy.SetInt("evidence_version", 1);
+	json_encode(legacy, before, sizeof(before)); legacy.Cleanup(); delete legacy;
+	sResumed = true; GOKZ_Relay_OnResume(1, sID, before, true);
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	legacy = json_decode(after);
+	Check(gValid[1] && legacy.GetInt("evidence_version") == 2, "valid legacy archive upgrades through core-valid v2 restore");
+	legacy.Cleanup(); delete legacy;
+	sVersionNative = false; GOKZ_Relay_OnResume(1, sID, before, true);
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(!gValid[1] && !after[0], "missing runtime version native fails closed for live capture");
+	sVersionNative = true; sAPIVersion = 1; GOKZ_Relay_OnResume(1, sID, before, true);
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(!gValid[1] && !after[0], "legacy runtime version cannot qualify live resume"); sAPIVersion = 2;
+	Fresh(); GOKZ_OnTimerStart_Post(1, 0); GOKZ_OnTimerEnd_Post(1, 0, 12.0, 0);
+	Check(Jobs() == 1 && !gRun[1], "genuine fresh start and normal finish still queue once");
 	PrintToServer("[relay-lifecycle-test] PASS assertions=%d", sAssertions);
+	delete gDB;
 }

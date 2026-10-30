@@ -115,20 +115,21 @@ context ABI can differ. Release archives include the compiled helper.
 
 ## Optional relay records
 
-`gokz-top-records` 1.1.0 consumes the optional AXEKZ `gokz/relay.inc` v1 API.
+`gokz-top-records` 1.2.0 consumes the optional AXEKZ `gokz/relay.inc` v2 API.
 A compatible relay producer owns safe-position/checkpoint save/resume and replay continuity;
-this package only supplies the gokz.top consumer. Core, global and anticheat
-plugins do not need changes for this consumer.
+this package supplies the gokz.top consumer. The producer requires the matching
+GlobalAPI relay-record guard; core and anticheat stay unchanged.
 
 The consumer captures versioned cumulative validation evidence at every save and
 completion. Relay persists that opaque evidence and the stable run UUIDv7 across
 reconnects. Missing evidence and earlier integrity failures cannot qualify for
-rankings. Expected core invalidity is exempted only for a matching relay-owned
-resumed session; settings, anticheat, mode/style and producer integrity checks
-remain enforced. API environment/server identity must match at resume.
+rankings. API v2 requires a valid core timer; settings, anticheat, mode/style and
+producer integrity checks remain enforced. API environment/server identity must match at resume.
 
 Dedicated completion delivery uses immutable metadata and does not require a
-connected client or the ordinary timer-end event. Valid finishes use normal NUB/PRO
+connected client at delivery time. API v2 finishes through real core end events;
+ordinary capture is suppressed for every restoring/resumed session, including
+missing/mismatched evidence, to keep durable relay delivery the sole upload source. Valid finishes use normal NUB/PRO
 ranking/filter/replay policies and the existing durable upload queue. Identical
 redeliveries preserve queue state; conflicting UUID reuse is rejected. Delivery
 is acknowledged after queueing or a durable rejection, independently of HTTP
@@ -154,3 +155,11 @@ Validated safe-position resumes can preserve zero teleports and qualify through
 ordinary PRO or NUB filters. Checkpoint fallback adds one teleport. The consumer
 rejects negative counts and never infers integrity from a zero teleport count;
 all cumulative evidence and relay-owned eligibility checks still apply.
+
+Live resume ranking requires `GOKZ_Relay_GetAPIVersion()==2` and core validity.
+Old/missing runtime negotiation cannot qualify new live captures. Existing durable
+v1 completion/evidence pairs still process under legacy rules; v2 pairs require
+v2 evidence. Valid v1 snapshot evidence can migrate through a validated v2 restore.
+The producer captures evidence in pre-end and confirms its outbox only after the
+real post-end event. Internal restoration starts must advertise `IsRestoring`
+before core start, and `IsResumed`/UUID must survive every end callback.

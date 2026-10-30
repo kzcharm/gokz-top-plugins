@@ -1,4 +1,4 @@
-// Consumer of the AXEKZ-owned relay v1 API. Evidence is opaque to the producer.
+// Consumer of the AXEKZ-owned relay v2 API. Evidence is opaque to the producer.
 static bool sRelaySession[MAXPLAYERS + 1];
 static int sStoppedSerial[MAXPLAYERS + 1], sStoppedTick[MAXPLAYERS + 1];
 static char sStoppedID[MAXPLAYERS + 1][37], sStoppedEvidence[MAXPLAYERS + 1][GOKZ_RELAY_EVIDENCE_MAX];
@@ -35,7 +35,30 @@ void Relay_OnLibraryRemoved(const char[] name)
 	}
 }
 
-bool Relay_CoreInvalidityExpected(int client)
+bool Relay_CoreValidAPI()
+{
+	return Relay_Available()
+		&& GetFeatureStatus(FeatureType_Native, "GOKZ_Relay_GetAPIVersion") == FeatureStatus_Available
+		&& GOKZ_Relay_GetAPIVersion() == 2;
+}
+
+bool Relay_IsRestoring(int client)
+{
+	return LibraryExists("gokz-relay")
+		&& GetFeatureStatus(FeatureType_Native, "GOKZ_Relay_IsRestoring") == FeatureStatus_Available
+		&& GOKZ_Relay_IsRestoring(client);
+}
+
+// Suppress ordinary capture even when archived evidence cannot be validated.
+// Producer ownership is independent of consumer eligibility and core validity.
+bool Relay_SuppressOrdinaryCapture(int client)
+{
+	return Relay_IsRestoring(client) || (LibraryExists("gokz-relay")
+		&& GetFeatureStatus(FeatureType_Native, "GOKZ_Relay_IsResumed") == FeatureStatus_Available
+		&& GOKZ_Relay_IsResumed(client));
+}
+
+bool Relay_OwnedSession(int client)
 {
 	if (!sRelaySession[client] || !Relay_Available() || !GOKZ_Relay_IsResumed(client)) return false;
 	char id[37];
@@ -93,7 +116,7 @@ bool Relay_StoppedEvidence(int client, const char[] id, char[] evidence, int max
 	if (sStoppedSerial[client] == 0 || sStoppedSerial[client] != GetClientSerial(client)
 		|| sStoppedTick[client] != GetGameTickCount() || !StrEqual(id, sStoppedID[client])) return false;
 	// A later invalidation in the same forward must still poison the final save.
-	if (!GOKZ_GetValidTimer(client) && !Relay_CoreInvalidityExpected(client)) gValid[client] = false;
+	if (!GOKZ_GetValidTimer(client)) gValid[client] = false;
 	if (!gValid[client])
 	{
 		JSON_Object saved = json_decode(sStoppedEvidence[client]);
@@ -110,7 +133,7 @@ bool Relay_StoppedEvidence(int client, const char[] id, char[] evidence, int max
 public void GOKZ_Relay_OnCaptureEvidence(int client, char[] evidence, int maxlength)
 {
 	evidence[0] = '\0';
-	if (!Relay_Available() || client < 1 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client)) return;
+	if (!Relay_CoreValidAPI() || client < 1 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client) || Relay_IsRestoring(client)) return;
 	char id[37];
 	if (!GOKZ_Relay_GetRunID(client, id, sizeof(id)) || !Relay_UUID(id)) return;
 	if (!gRun[client])
@@ -119,14 +142,14 @@ public void GOKZ_Relay_OnCaptureEvidence(int client, char[] evidence, int maxlen
 		return;
 	}
 	if (!ServerSettingsValid() || !ClientSettingsValid(client)
-		|| (!GOKZ_GetValidTimer(client) && !Relay_CoreInvalidityExpected(client))) gValid[client] = false;
-	if (sRelaySession[client] && (!Relay_CoreInvalidityExpected(client) || !GOKZ_Relay_IsEligible(client))) gValid[client] = false;
+		|| (!GOKZ_GetValidTimer(client))) gValid[client] = false;
+	if (Relay_SuppressOrdinaryCapture(client) && (!Relay_OwnedSession(client) || !GOKZ_Relay_IsEligible(client))) gValid[client] = false;
 	JSON_Object body = Capture_Check(client, GOKZ_GetCourse(client));
 	if (body == null) return;
 	char steam2[32];
 	GetClientAuthId(client, AuthId_Steam2, steam2, sizeof(steam2));
 	body.SetString("steam2", steam2);
-	body.SetInt("evidence_version", 1);
+	body.SetInt("evidence_version", 2);
 	body.SetString("run_id", id);
 	body.SetString("environment", gEnvironment[client]);
 	json_encode(body, evidence, maxlength);
@@ -155,7 +178,7 @@ public void GOKZ_Relay_OnResume(int client, const char[] runID, const char[] evi
 	saved.GetString("server_id", savedServer, sizeof(savedServer));
 	JSON_Object current = Capture_Check(client, GOKZ_GetCourse(client));
 	int mode = GOKZ_GetCoreOption(client, Option_Mode);
-	bool matches = current != null && saved.GetInt("evidence_version") == 1 && StrEqual(savedID, runID)
+	bool matches = current != null && (saved.GetInt("evidence_version") == 1 || saved.GetInt("evidence_version") == 2) && StrEqual(savedID, runID)
 		&& StrEqual(environment, savedEnvironment) && server[0] && StrEqual(server, savedServer);
 	if (matches)
 	{
@@ -175,8 +198,8 @@ public void GOKZ_Relay_OnResume(int client, const char[] runID, const char[] evi
 		strcopy(gGUID[client], sizeof(gGUID[]), runID);
 		strcopy(gEnvironment[client], sizeof(gEnvironment[]), environment);
 		strcopy(gServer[client], sizeof(gServer[]), server);
-		gValid[client] = eligible && GOKZ_Relay_IsEligible(client) && Relay_Integrity(saved)
-			&& gFreshMap && ServerSettingsValid() && ClientSettingsValid(client);
+		gValid[client] = Relay_CoreValidAPI() && eligible && GOKZ_Relay_IsEligible(client) && Relay_Integrity(saved)
+			&& GOKZ_GetValidTimer(client) && gFreshMap && ServerSettingsValid() && ClientSettingsValid(client);
 	}
 	if (current != null) { current.Cleanup(); delete current; }
 	saved.Cleanup(); delete saved;
@@ -195,8 +218,11 @@ JSON_Object Relay_Record(JSON_Object completion, JSON_Object saved)
 	for (int i = 0; i < sizeof(integers); i++) if (completion.GetKeyType(integers[i]) != Type_Int) return null;
 	static char strings[][] = {"run_id", "steamid64", "map_name"};
 	for (int i = 0; i < sizeof(strings); i++) if (completion.GetKeyType(strings[i]) != Type_String) return null;
-	if (completion.GetInt("version") != 1 || !completion.GetBool("eligible")
-		|| saved.GetInt("evidence_version") != 1 || !Relay_Integrity(saved)) return null;
+	// Existing durable v1 completions retain their original integrity semantics.
+	// Newly captured v2 evidence must accompany a confirmed v2 completion.
+	int version = completion.GetInt("version");
+	if ((version != 1 && version != 2) || saved.GetInt("evidence_version") != version
+		|| !completion.GetBool("eligible") || !Relay_Integrity(saved)) return null;
 	char id[37], savedID[37], modeName[8], steam[32], map[PLATFORM_MAX_PATH], environment[512], server[37];
 	completion.GetString("run_id", id, sizeof(id)); saved.GetString("run_id", savedID, sizeof(savedID));
 	saved.GetString("mode", modeName, sizeof(modeName));

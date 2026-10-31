@@ -68,7 +68,9 @@ void HTTP_Next()
 	SteamWorks_SetHTTPCallbacks(request, OnRecordHTTPComplete);
 	SteamWorks_SetHTTPRequestHeaderValue(request, "X-Server-Group-Key", key);
 	SteamWorks_SetHTTPRequestHeaderValue(request, "Idempotency-Key", id);
-	SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(request, 60000);
+	// Large replays need transfer time independent of metadata requests.
+	if (StrEqual(state, "replay")) SteamWorks_SetHTTPRequestNetworkActivityTimeout(request, 120);
+	SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(request, (StrEqual(state, "replay") ? gCV_ReplayTimeout.IntValue : 60) * 1000);
 	bool bodyOK;
 	if (StrEqual(state, "replay")) bodyOK = SteamWorks_SetHTTPRequestRawPostBodyFromFile(request, "application/octet-stream", replay);
 	else bodyOK = SteamWorks_SetHTTPRequestRawPostBody(request, "application/json", payload, strlen(payload));
@@ -123,7 +125,7 @@ public void OnRecordHTTPComplete(Handle request, bool failure, bool successful, 
 			}
 			else if (body.GetBool("available"))
 			{
-				Format(query, sizeof(query), "UPDATE jobs SET replay_done=1,state=CASE WHEN upstream>0 THEN 'accepted' ELSE 'done' END,next=%d WHERE id='%s'", GetTime() + 60, id);
+				Format(query, sizeof(query), "UPDATE jobs SET error='',attempts=0,replay_done=1,state=CASE WHEN upstream>0 THEN 'accepted' ELSE 'done' END,next=%d WHERE id='%s'", GetTime() + 60, id);
 				Queue_SQL(query);
 			}
 			body.Cleanup(); delete body;
@@ -136,7 +138,7 @@ public void OnRecordHTTPComplete(Handle request, bool failure, bool successful, 
 		else Queue_State(id, "rejected", 0, gLastStatus);
 	}
 	else if (status == 401 || (status == 403 && StrEqual(state, "record"))) Queue_State(id, "auth", 0, gLastStatus);
-	else if (failure || !successful || status == 408 || status == 429 || status >= 500 || status == 0)
+	else if (failure || !successful || status == 404 || status == 408 || status == 429 || status >= 500 || status == 0)
 	{
 		int delay = RoundToCeil(5.0 * Pow(2.0, float(attempts > 8 ? 8 : attempts)));
 		if (delay > 900) delay = 900;

@@ -113,3 +113,19 @@ cover retained pending v1 processing as well as strict v2 evidence matching.
 Record probes rename included production forwards so live relay/core/replay and
 GlobalAPI events cannot enter their synthetic fixtures. Keep probes unloaded
 outside their own checks, and remove their binaries before gameplay validation.
+
+## Record HTTP timeout and recovery
+
+Compile `record_http.sp` with the records plugin include paths and load it only
+on csgotest with a localhost fixture on port 18092. The fixture must receive
+PUT bodies and return `{"available":true}` after 65 seconds. The probe uses
+its own SQLite queue and a synthetic 1 KiB replay; it makes no API/game writes.
+It first verifies the former 60-second deadline leaves the file/job retryable,
+then retries with 900 seconds and requires a durable replay acknowledgement.
+Expect `[record-http-test] PASS`; unload/remove the probe and fixture afterward.
+
+`record_retries.sp` exercises the real HTTP completion handler with a private
+SQLite queue and no network requests. It verifies404 retries in every upload
+phase,408/429/503/network failures,Retry-After,authentication pauses,permanent
+conflict/validation rejection,and preservation of canonical IDs and spool paths.
+Expect `[record-retries-test] PASS assertions=67`.

@@ -38,8 +38,20 @@ public Action Command_Queue(int client, int args)
 
 public Action Command_Retry(int client, int args)
 {
-	Queue_SQL("UPDATE jobs SET state=CASE WHEN canonical='' THEN 'record' ELSE 'accepted' END,next=0,attempts=0 WHERE state IN ('rejected','auth')");
-	ReplyToCommand(client, "[gokz.top] Retained failed jobs are ready to retry in their original environment.");
+	char id[37], query[512];
+	if (args > 0)
+	{
+		GetCmdArg(1, id, sizeof(id));
+		if (!IsRecordUUID(id)) { ReplyToCommand(client, "[gokz.top] Supply a record UUID."); return Plugin_Handled; }
+		Format(query, sizeof(query), "UPDATE jobs SET state=CASE WHEN canonical='' THEN 'record' ELSE 'accepted' END,next=0,attempts=0 WHERE id='%s' AND state IN ('rejected','auth')", id);
+		Queue_SQL(query);
+		ReplyToCommand(client, "[gokz.top] Retained job %s is ready to retry in its original environment.", id);
+	}
+	else
+	{
+		Queue_SQL("UPDATE jobs SET state=CASE WHEN canonical='' THEN 'record' ELSE 'accepted' END,next=0,attempts=0 WHERE state IN ('rejected','auth')");
+		ReplyToCommand(client, "[gokz.top] Retained failed jobs are ready to retry in their original environment.");
+	}
 	return Plugin_Handled;
 }
 

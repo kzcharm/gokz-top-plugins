@@ -65,6 +65,7 @@ char sSettingNames[][] = {"sv_cheats", "sv_clamp_unsafe_velocities", "mp_drop_kn
 float sSettingValues[] = {0.0, 0.0, 0.0, 0.0, 128.0, 128.0, 128.0, 128.0, 0.0, 0.0};
 char sID[] = "01900000-0000-7000-8000-000000000001";
 char sCurrentID[37];
+char sServer[37] = "85568392936085241";
 
 bool TestLibrary(const char[] name) { return name[0] != 0; }
 FeatureStatus TestFeature(FeatureType type, const char[] name) { return type == FeatureType_Native && name[0] && !StrEqual(name, "GOKZ_DB_GetRunGUID") && (sVersionNative || !StrEqual(name, "GOKZ_Relay_GetAPIVersion")) ? FeatureStatus_Available : FeatureStatus_Unavailable; }
@@ -94,7 +95,7 @@ bool TestAuth(int client, AuthIdType type, char[] auth, int capacity, bool valid
 	return true;
 }
 void TestConfig(char[] url, int urlCapacity, char[] key, int keyCapacity) { strcopy(url, urlCapacity, "https://relay-test.invalid"); strcopy(key, keyCapacity, "synthetic"); }
-bool TestServer(char[] id, int capacity) { strcopy(id, capacity, "85568392936085241"); return true; }
+bool TestServer(char[] id, int capacity) { strcopy(id, capacity, sServer); return sServer[0] != '\0'; }
 int TestOption(int client, Option option) { return client == 1 && option == Option_Mode ? 2 : 0; }
 int TestModeVersion(int mode) { return mode == 2 ? 2172 : 0; }
 int TestCourse(int client) { return client == 1 ? 0 : -1; }
@@ -123,6 +124,7 @@ void Replies(ConVarQueryResult result, const char[] fps = "300", const char[] ya
 }
 void Fresh()
 {
+	strcopy(sServer, sizeof(sServer), "85568392936085241");
 	Relay_ResetClient(1); OnClientPutInServer(1); Replies(ConVarQuery_Okay);
 	gRun[1] = true; gValid[1] = true; gFreshMap = true; gMode[1] = 2; gVersion[1] = 2172;
 	strcopy(sCurrentID, sizeof(sCurrentID), sID); strcopy(gGUID[1], sizeof(gGUID[]), sID);
@@ -197,6 +199,50 @@ public void OnPluginStart()
 	gRun[1] = false; sResumed = true; sCoreValid = true;
 	GOKZ_Relay_OnResume(1, sID, before, true);
 	Check(gRun[1] && gValid[1] && Relay_OwnedSession(1), "resolved reconnect resume restores cumulative eligibility");
+	// A -> B -> C keeps the logical run and cumulative checks, while each
+	// destination captures its own server identity for authenticated submission.
+	strcopy(sServer, sizeof(sServer), "85568392935952221");
+	GOKZ_Relay_OnResume(1, sID, before, true);
+	Check(gRun[1] && gValid[1] && Relay_OwnedSession(1), "cross-server resume retains valid owned run");
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	JSON_Object hop = json_decode(after);
+	Check(hop != null && EvidenceValid(after), "cross-server evidence remains nonempty and valid");
+	char hopServer[37], hopID[37];
+	hop.GetString("server_id", hopServer, sizeof(hopServer)); hop.GetString("run_id", hopID, sizeof(hopID));
+	Check(StrEqual(hopServer, sServer) && StrEqual(hopID, sID), "destination identity replaces source while UUID stays stable");
+	hop.Cleanup(); delete hop;
+	strcopy(before, sizeof(before), after);
+	strcopy(sServer, sizeof(sServer), "85568392935952222");
+	GOKZ_Relay_OnResume(1, sID, before, true);
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(gRun[1] && gValid[1] && EvidenceValid(after), "second server hop preserves cumulative evidence");
+	hop = json_decode(after);
+	JSON_Object finish = json_decode("{\"version\":2,\"run_id\":\"01900000-0000-7000-8000-000000000001\",\"steamid64\":\"76561197960265974\",\"map_name\":\"relay_test\",\"course\":0,\"mode\":2,\"style\":0,\"time_ms\":123456,\"teleports\":1,\"finished_at\":1793384000,\"eligible\":true}");
+	JSON_Object outbound = Relay_Record(finish, hop);
+	Check(outbound != null, "cross-server completion builds an upload payload");
+	outbound.GetString("server_id", hopServer, sizeof(hopServer)); outbound.GetString("record_uuid", hopID, sizeof(hopID));
+	Check(StrEqual(hopServer, sServer) && StrEqual(hopID, sID), "upload belongs to finishing server and original UUID");
+	outbound.Cleanup(); delete outbound; finish.Cleanup(); delete finish;
+	JSON_Object checks = hop.GetObject("integrity"); checks.SetBool("anticheat_clear", false);
+	json_encode(hop, before, sizeof(before));
+	GOKZ_Relay_OnResume(1, sID, before, true);
+	GOKZ_Relay_OnCaptureEvidence(1, after, sizeof(after));
+	Check(gRun[1] && !gValid[1] && after[0] && !EvidenceValid(after), "earlier server integrity failure survives migration");
+	checks.SetBool("anticheat_clear", true); hop.SetString("environment", "https://other-api.invalid");
+	json_encode(hop, before, sizeof(before));
+	GOKZ_Relay_OnResume(1, sID, before, true);
+	Check(!gRun[1] && !gValid[1], "server migration cannot change API environment");
+	hop.SetString("environment", "https://relay-test.invalid"); hop.SetString("server_id", "");
+	json_encode(hop, before, sizeof(before));
+	GOKZ_Relay_OnResume(1, sID, before, true);
+	Check(!gRun[1], "missing archived server identity still fails closed");
+	hop.SetString("server_id", "85568392935952221");
+	json_encode(hop, before, sizeof(before)); sServer[0] = '\0';
+	GOKZ_Relay_OnResume(1, sID, before, true);
+	Check(!gRun[1], "destination must have an authenticated server identity");
+	hop.Cleanup(); delete hop;
+	Fresh(); GOKZ_Relay_OnCaptureEvidence(1, before, sizeof(before)); sResumed = true;
+	GOKZ_Relay_OnResume(1, sID, before, true);
 	Replies(ConVarQuery_Okay, "30", "1");
 	GOKZ_Relay_OnResume(1, sID, before, true);
 	Check(gRun[1] && !gValid[1], "known ineligible values cannot regain eligibility on resume");

@@ -124,7 +124,11 @@ The consumer captures versioned cumulative validation evidence at every save and
 completion. Relay persists that opaque evidence and the stable run UUIDv7 across
 reconnects. Missing evidence and earlier integrity failures cannot qualify for
 rankings. API v2 requires a valid core timer; settings, anticheat, mode/style and
-producer integrity checks remain enforced. API environment/server identity must match at resume.
+producer integrity checks remain enforced. API environments must match at resume.
+Version 1.2.2 allows continuation on another server with a valid SteamID. Each
+segment preserves the earlier integrity verdicts and captures its current server
+identity; the finishing server owns the submitted record. The destination must
+be authorized to submit to the same API environment.
 
 Dedicated completion delivery uses immutable metadata and does not require a
 connected client at delivery time. API v2 finishes through real core end events;

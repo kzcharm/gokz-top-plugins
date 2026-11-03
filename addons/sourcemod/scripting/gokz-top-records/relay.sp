@@ -179,7 +179,7 @@ public void GOKZ_Relay_OnResume(int client, const char[] runID, const char[] evi
 	JSON_Object current = Capture_Check(client, GOKZ_GetCourse(client));
 	int mode = GOKZ_GetCoreOption(client, Option_Mode);
 	bool matches = current != null && (saved.GetInt("evidence_version") == 1 || saved.GetInt("evidence_version") == 2) && StrEqual(savedID, runID)
-		&& StrEqual(environment, savedEnvironment) && server[0] && StrEqual(server, savedServer);
+		&& StrEqual(environment, savedEnvironment) && server[0] && savedServer[0];
 	if (matches)
 	{
 		matches = Relay_StringEquals(saved, "steamid64", current, "steamid64")
@@ -197,6 +197,8 @@ public void GOKZ_Relay_OnResume(int client, const char[] runID, const char[] evi
 		gVersion[client] = saved.GetInt("mode_version");
 		strcopy(gGUID[client], sizeof(gGUID[]), runID);
 		strcopy(gEnvironment[client], sizeof(gEnvironment[]), environment);
+		// A relay may continue on another server. Preserve the cumulative
+		// verdicts below, but submit this segment under its current server.
 		strcopy(gServer[client], sizeof(gServer[]), server);
 		gValid[client] = Relay_CoreValidAPI() && eligible && GOKZ_Relay_IsEligible(client) && Relay_Integrity(saved)
 			&& GOKZ_GetValidTimer(client) && gFreshMap && ServerSettingsValid() && ClientSettingsValid(client);

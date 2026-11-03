@@ -95,7 +95,7 @@ with no GlobalAPI record-create request.
 `relay_lifecycle.sp` exercises production validation and relay callbacks with
 synthetic clients, cvar replies and private test cvars. It makes no HTTP requests
 or player changes. Compile/load on `csgotest`; expect
-`[relay-lifecycle-test] PASS assertions=40`, then unload/remove the probe.
+`[relay-lifecycle-test] PASS assertions=50`, then unload/remove the probe.
 
 Checks include unresolved/in-flight/failed setting queries, known invalid values,
 stale-connection replies, both stop listener orders, real core validity and genuine invalidation,
@@ -103,6 +103,10 @@ late sticky failures, UUID/serial/tick isolation, new-run/disconnect cleanup,
 resume eligibility restoration, no requalification after invalid values, and
 empty-evidence preservation. The producer must bound its pre-claim readiness wait
 to five seconds and retain the save when queries remain unresolved.
+
+Cross-server checks cover A -> B -> C continuation, a stable UUID and finishing
+server identity in the upload payload, preservation of earlier anticheat failures,
+API-environment isolation, and missing source/destination server identities.
 
 The v2 lifecycle probe also checks internal real-start suppression, archived
 failures, both normal post-end listener orders without duplicate jobs, missing or

@@ -1,4 +1,14 @@
 char gC_Owner[MAXPLAYERS + 1][32];
+#define TRAIL_SIZE 96
+enum struct BotPose
+{
+	float at;
+	float origin[3];
+	float angles[3];
+	bool crouched;
+}
+BotPose gS_Trail[MAXPLAYERS + 1][TRAIL_SIZE];
+int gI_Head[MAXPLAYERS + 1], gI_Count[MAXPLAYERS + 1];
 
 bool IsMirror(int client)
 {
@@ -8,6 +18,7 @@ bool IsMirror(int client)
 public void OnClientDisconnect(int client)
 {
 	gC_Owner[client][0] = 0;
+	gI_Count[client] = 0;
 }
 
 public Action GOKZ_OnTimerStart(int client, int course)
@@ -36,6 +47,49 @@ void ClearMirrors()
 {
 	for (int i = 1; i <= MaxClients; i++)
 		if (IsMirror(i) && !IsClientInKickQueue(i)) KickClient(i, "Web player disconnected");
+}
+
+void AppendPose(int bot, const BotPose point)
+{
+	int head = gI_Head[bot], count = gI_Count[bot];
+	if (count && point.at <= gS_Trail[bot][(head + count - 1) % TRAIL_SIZE].at) return;
+	gS_Trail[bot][(head + count) % TRAIL_SIZE] = point;
+	if (count == TRAIL_SIZE) gI_Head[bot] = (head + 1) % TRAIL_SIZE;
+	else gI_Count[bot]++;
+}
+
+void PlayMirrors(float at)
+{
+	for (int bot = 1; bot <= MaxClients; bot++)
+	{
+		if (!gI_Count[bot] || !IsMirror(bot) || !IsPlayerAlive(bot)) continue;
+		int head = gI_Head[bot], next = (head + 1) % TRAIL_SIZE;
+		while (gI_Count[bot] > 1 && gS_Trail[bot][next].at <= at)
+		{
+			gI_Count[bot]--;
+			gI_Head[bot] = head = next;
+			next = (head + 1) % TRAIL_SIZE;
+		}
+		BotPose pose;
+		pose = gS_Trail[bot][head];
+		if (gI_Count[bot] > 1 && at > pose.at &&
+			GetVectorDistance(pose.origin, gS_Trail[bot][next].origin) < 96.0 &&
+			gS_Trail[bot][next].at - pose.at < 0.15)
+		{
+			float t = (at - pose.at) / (gS_Trail[bot][next].at - pose.at);
+			for (int axis; axis < 3; axis++)
+			{
+				pose.origin[axis] += t * (gS_Trail[bot][next].origin[axis] - pose.origin[axis]);
+				float delta = gS_Trail[bot][next].angles[axis] - pose.angles[axis];
+				pose.angles[axis] += t * (delta - 360.0 * RoundToNearest(delta / 360.0));
+			}
+		}
+		float origin[3], zero[3];
+		GetClientAbsOrigin(bot, origin);
+		if (GetVectorDistance(origin, pose.origin, true) > 0.0001) gI_Moved++;
+		SetEntProp(bot, Prop_Send, "m_bDucked", pose.crouched);
+		TeleportEntity(bot, pose.origin, pose.angles, zero);
+	}
 }
 
 void ApplyMirrors(JSONArray players)
@@ -67,15 +121,20 @@ void ApplyMirrors(JSONArray players)
 			if (!IsPlayerAlive(bot)) CS_RespawnPlayer(bot);
 			SetEntityMoveType(bot, MOVETYPE_NONE);
 			SetEntProp(bot, Prop_Send, "m_CollisionGroup", 2);
-			JSONArray pos = view_as<JSONArray>(pose.Get("position"));
-			JSONArray ang = view_as<JSONArray>(pose.Get("angles"));
-			float origin[3], angles[3], zero[3];
-			for (int i; i < 3; i++) origin[i] = pos.GetFloat(i);
-			for (int i; i < 2; i++) angles[i] = ang.GetFloat(i);
-			SetEntProp(bot, Prop_Send, "m_bDucked", pose.GetBool("crouched"));
-			TeleportEntity(bot, origin, angles, zero);
-			delete pos;
-			delete ang;
+			JSONArray trail = view_as<JSONArray>(pose.Get("trail"));
+			BotPose point;
+			for (int n; n < trail.Length; n++)
+			{
+				JSONArray row = view_as<JSONArray>(trail.Get(n));
+				point.at = float(row.GetInt(0)) / 1000.0;
+				for (int i; i < 3; i++) point.origin[i] = row.GetFloat(1 + i);
+				for (int i; i < 2; i++) point.angles[i] = row.GetFloat(4 + i);
+				point.crouched = row.GetBool(6);
+				AppendPose(bot, point);
+				gI_WebSamples++;
+				delete row;
+			}
+			delete trail;
 		}
 		delete pose;
 	}

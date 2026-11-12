@@ -23,13 +23,13 @@ public Plugin myinfo =
 	name = "GOKZ Top Records",
 	author = "KZCharm",
 	description = "Durable direct records and replay uploads to gokz.top",
-	version = "1.2.2",
+	version = "1.2.3",
 	url = "https://gokz.top"
 };
 
 Database gDB;
 GlobalForward gH_OnRecordAccepted;
-ConVar gCV_Server, gCV_Spool, gCV_ReplayTimeout;
+ConVar gCV_Server, gCV_ReplayTimeout;
 bool gFreshMap, gLateMap, gBusy, gRun[MAXPLAYERS + 1], gValid[MAXPLAYERS + 1];
 int gMode[MAXPLAYERS + 1], gVersion[MAXPLAYERS + 1];
 char gGUID[MAXPLAYERS + 1][37], gEnvironment[MAXPLAYERS + 1][512], gServer[MAXPLAYERS + 1][37];
@@ -60,7 +60,7 @@ public void OnPluginStart()
 {
 	gH_OnRecordAccepted = new GlobalForward("GOKZTop_OnRecordAccepted", ET_Ignore, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_String);
 	gCV_Server = CreateConVar("gokz_top_records_server_id", "", "Deprecated: previous server UUID, used only to drain legacy queued jobs. New runs use the authenticated server SteamID.");
-	gCV_Spool = CreateConVar("gokz_top_records_spool_gib", "10", "Maximum private replay spool size in GiB.", _, true, 0.0);
+	CreateConVar("gokz_top_records_spool_gib", "10", "Deprecated: run replays upload directly from their original paths; no new spool copies are created.", _, true, 0.0);
 	gCV_ReplayTimeout = CreateConVar("gokz_top_records_replay_timeout", "900", "Total replay upload deadline in seconds; metadata requests retain their 60-second deadline.", _, true, 60.0, true, 3600.0);
 	AutoExecConfig(true, "gokz-top-records", "sourcemod/gokz-top");
 	BuildPath(Path_SM, gSpool, sizeof(gSpool), "data/gokz-top-records");

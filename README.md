@@ -142,7 +142,17 @@ be included in its backup. The relay producer's snapshots/completions use its ow
 PostgreSQL storage.
 
 Replay delivery correlates by UUID, with `_runs/<map>/<uuid>.replay` discovery
-recovering missed callbacks. Relay jobs are excluded from heuristic GlobalAPI
+recovering missed callbacks. Records plugin 1.2.3 stores the original replay path
+in SQLite and uploads that file directly, without creating private replay copies.
+Completed UUID run replays must remain available and unchanged until upload succeeds;
+external cleanup or archival jobs must preserve files referenced by pending jobs.
+Temporary run callbacks transfer deletion ownership to the records plugin so the
+original remains available for retries. The uploader never deletes original files.
+Previously queued spool paths remain supported, and discovery can recover old
+spool copies when originals are missing. Existing spool files are not automatically
+deleted; `gokz_top_records_spool_gib` remains only as a deprecated compatibility cvar.
+Back up the records SQLite database together with its referenced replay files.
+Relay jobs are excluded from heuristic GlobalAPI
 identity attachment. Ordinary fresh runs and queued jobs continue when relay is
 absent; unloading relay invalidates active consumer sessions. See
 `tests/README.md` for isolated probes and required producer gameplay checks.

@@ -73,12 +73,13 @@ test server only; it makes no HTTP requests and never submits a run.
 Compile `relay_records.sp` with the records plugin's include paths and load it on
 `csgotest`. It uses a private SQLite database/spool, stubs HTTP and relay
 acknowledgements, and creates no game runs or public records. Expect
-`[relay-records-test] PASS assertions=52`; unload/remove the probe afterward.
+`[relay-records-test] PASS assertions=59`; unload/remove the probe afterward.
 
 It checks the relay v1/v2 completion contracts, UUIDv7/NUB/PRO classification, exact
 millisecond serialization, zero-TP queueing through PRO-only filters, cumulative anticheat evidence, malformed and legacy
 evidence rejection, optional dependency absence, UUID replay correlation and
-immutable private copies, durable completion/rejection receipts, reload-safe
+direct original-file paths without copies, missing-source and legacy-spool recovery,
+temporary-original retention, durable completion/rejection receipts, reload-safe
 redelivery, conflicting identities, and database/queue failures without premature
 acknowledgements. The filter and precision probes additionally cover preserving
 retry/replay acknowledgements and excluding relay jobs from GlobalAPI matching.

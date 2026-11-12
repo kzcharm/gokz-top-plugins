@@ -1,48 +1,10 @@
-void SpoolReplay(const char[] id, const char[] source)
+bool RegisterReplay(const char[] id, const char[] source)
 {
-	char existing[PLATFORM_MAX_PATH];
-	Format(existing, sizeof(existing), "%s/%s.replay", gSpool, id);
-	// Recover a copy committed before a crash interrupted the SQLite update.
-	if (FileExists(existing)) { RegisterSpoolReplay(id, existing); return; }
-	if (!FileExists(source)) return;
-	float used = 0.0;
-	DirectoryListing directory = OpenDirectory(gSpool);
-	char name[PLATFORM_MAX_PATH], path[PLATFORM_MAX_PATH];
-	FileType type;
-	while (directory != null && directory.GetNext(name, sizeof(name), type))
-	{
-		if (type != FileType_File) continue;
-		Format(path, sizeof(path), "%s/%s", gSpool, name);
-		used += float(FileSize(path));
-	}
-	delete directory;
-	Format(path, sizeof(path), "%s/%s.replay", gSpool, id);
-	if (used + float(FileSize(source)) > gCV_Spool.FloatValue * 1073741824.0)
-	{
-		LogError("Replay spool full for record %s; record submission continues", id);
-		return;
-	}
-	char partial[PLATFORM_MAX_PATH];
-	Format(partial, sizeof(partial), "%s.part", path);
-	File input = OpenFile(source, "rb"), output = OpenFile(partial, "wb");
-	if (input == null || output == null) { delete input; delete output; return; }
-	int buffer[4096], count;
-	bool success = true;
-	while ((count = input.Read(buffer, sizeof(buffer), 1)) > 0)
-	{
-		if (!output.Write(buffer, count, 1)) { success = false; break; }
-	}
-	delete input; delete output;
-	if (!success || !RenameFile(path, partial)) { DeleteFile(partial); return; }
-	RegisterSpoolReplay(id, path);
-}
-
-void RegisterSpoolReplay(const char[] id, const char[] path)
-{
+	if (!FileExists(source)) return false;
 	char escaped[1024], query[2048];
-	gDB.Escape(path, escaped, sizeof(escaped));
-	Format(query, sizeof(query), "UPDATE jobs SET replay='%s' WHERE id='%s'", escaped, id);
-	Queue_SQL(query);
+	gDB.Escape(source, escaped, sizeof(escaped));
+	Format(query, sizeof(query), "UPDATE jobs SET replay='%s' WHERE id='%s' AND replay=''", escaped, id);
+	return Queue_SQL(query);
 }
 
 public Action GOKZ_RP_OnReplaySaved(int client, int replayType, const char[] map, int course, int timeType, float time, const char[] filePath, bool tempReplay)
@@ -81,7 +43,8 @@ public Action GOKZ_RP_OnReplaySaved(int client, int replayType, const char[] map
 		body.Cleanup(); delete body;
 	}
 	delete rows;
-	if (matches == 1) SpoolReplay(match, filePath);
+	// Keep temporary originals alive for durable upload retries instead of copying them.
+	if (matches == 1 && RegisterReplay(match, filePath) && tempReplay) return Plugin_Handled;
 	else if (matches > 1) LogError("Replay matches multiple captured finishes; preserved metadata requires operator review");
 	return Plugin_Continue;
 }
@@ -105,7 +68,12 @@ void DiscoverReplays()
 		body.GetString("map_name", map, sizeof(map));
 		body.Cleanup(); delete body;
 		BuildPath(Path_SM, path, sizeof(path), "data/gokz-replays/_runs/%s/%s.replay", map, id);
-		SpoolReplay(id, path);
+		if (!RegisterReplay(id, path))
+		{
+			// Recover pre-upgrade spool copies when the original is no longer available.
+			Format(path, sizeof(path), "%s/%s.replay", gSpool, id);
+			RegisterReplay(id, path);
+		}
 	}
 	delete rows;
 	if (!found) cursor[0] = '\0';

@@ -306,6 +306,6 @@ public void GOKZ_Relay_OnReplaySaved(const char[] runID, const char[] filePath)
 	char query[256];
 	Format(query, sizeof(query), "SELECT id FROM jobs WHERE id='%s' AND relay=1 AND state NOT IN ('done','rejected')", runID);
 	DBResultSet row = SQL_Query(gDB, query);
-	if (row != null && row.FetchRow()) SpoolReplay(runID, filePath);
+	if (row != null && row.FetchRow()) RegisterReplay(runID, filePath);
 	delete row;
 }

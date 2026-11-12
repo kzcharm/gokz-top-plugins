@@ -126,6 +126,7 @@ jobs:
           mkdir -p dist/full dist/upgrade
           rsync -av \
             --exclude 'gokz-top-web-bridge.smx' \
+            --exclude 'gokz-top-web-bridge.phrases.txt' \
             --exclude 'gokz-top-web-bridge.cfg' \
             --exclude 'web-gokz*.key' \
             --exclude '.git/' \
@@ -140,6 +141,7 @@ jobs:
 
           rsync -av \
             --exclude 'gokz-top-web-bridge.smx' \
+            --exclude 'gokz-top-web-bridge.phrases.txt' \
             --exclude 'gokz-top-web-bridge.cfg' \
             --exclude 'web-gokz*.key' \
             --exclude '.git/' \
@@ -173,6 +175,7 @@ jobs:
             !addons/sourcemod/scripting*
             !*.zip
             !**/gokz-top-web-bridge.smx
+            !**/gokz-top-web-bridge.phrases.txt
             !**/gokz-top-web-bridge.cfg
             !**/web-gokz*.key
 
@@ -192,6 +195,7 @@ jobs:
             !cfg*
             !*.zip
             !**/gokz-top-web-bridge.smx
+            !**/gokz-top-web-bridge.phrases.txt
             !**/gokz-top-web-bridge.cfg
             !**/web-gokz*.key
 

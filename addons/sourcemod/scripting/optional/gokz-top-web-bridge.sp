@@ -5,6 +5,7 @@
 #include <ripext>
 #include <basecomm>
 #include <gokz/core>
+#include <sourcemod-colors>
 
 #pragma newdecls required
 #pragma semicolon 1
@@ -14,7 +15,7 @@ public Plugin myinfo =
 	name = "Web GOKZ bridge",
 	author = "GOKZ.TOP",
 	description = "Opt-in browser players and shared public chat",
-	version = "0.3.0"
+	version = "0.4.0"
 };
 
 char gC_Key[128], gC_Map[PLATFORM_MAX_PATH], gC_Generation[40];
@@ -37,6 +38,7 @@ char gC_URL[512], gC_Server[256];
 
 public void OnPluginStart()
 {
+	LoadTranslations("gokz-top-web-bridge.phrases");
 	gH_Chat = new JSONArray();
 	gH_Notices = new JSONArray();
 	gH_Samples = new JSONArray();
@@ -313,12 +315,7 @@ public void OnFrame(HTTPResponse response, int epoch, const char[] error)
 	JSONArray players = view_as<JSONArray>(frame.Get("players"));
 	ApplyMirrors(players);
 	delete players;
-	JSONArray chat = view_as<JSONArray>(frame.Get("chat"));
-	for (int i; i < chat.Length; i++)
-	{
-		char line[512];
-		chat.GetString(i, line, sizeof(line));
-		PrintToChatAll("%s", line);
-	}
-	delete chat;
+	PrintWebMessages(frame);
 }
+
+#include "gokz-top-web-bridge/chat.sp"

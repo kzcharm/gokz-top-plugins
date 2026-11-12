@@ -112,12 +112,23 @@ void ApplyMirrors(JSONArray players)
 			if (bot)
 			{
 				strcopy(gC_Owner[bot], sizeof(gC_Owner[]), id);
-				ChangeClientTeam(bot, CS_TEAM_CT);
 			}
 		}
 		if (bot)
 		{
 			seen[bot] = true;
+			int team = pose.HasKey("spectating") && pose.GetBool("spectating") ? CS_TEAM_SPECTATOR : CS_TEAM_CT;
+			if (GetClientTeam(bot) != team)
+			{
+				gI_Count[bot] = 0;
+				ChangeClientTeam(bot, team);
+			}
+			if (team == CS_TEAM_SPECTATOR)
+			{
+				gI_Count[bot] = 0;
+				delete pose;
+				continue;
+			}
 			if (!IsPlayerAlive(bot)) CS_RespawnPlayer(bot);
 			SetEntityMoveType(bot, MOVETYPE_NONE);
 			SetEntProp(bot, Prop_Send, "m_CollisionGroup", 2);

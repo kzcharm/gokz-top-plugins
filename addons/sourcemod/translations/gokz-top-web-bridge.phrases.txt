@@ -1,0 +1,15 @@
+"Phrases"
+{
+	"Web Player Joined"
+	{
+		"#format" "{1:s}"
+		"en" "{grey}[Web] {lime}{1}{grey} joined the server."
+		"chi" "{grey}[Web] {lime}{1}{grey} 加入了服务器。"
+	}
+	"Web Player Left"
+	{
+		"#format" "{1:s}"
+		"en" "{grey}[Web] {lime}{1}{grey} left the server."
+		"chi" "{grey}[Web] {lime}{1}{grey} 离开了服务器。"
+	}
+}

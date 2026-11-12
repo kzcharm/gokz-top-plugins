@@ -13,7 +13,8 @@ SourceMod plugins for integrating a GOKZ server with [GOKZ.TOP](https://gokz.top
 
 The bridge is installed separately from the normal full and upgrade packages.
 Compile `addons/sourcemod/scripting/optional/gokz-top-web-bridge.sp` with the
-REST in Pawn includes and install its SMX separately. It requires SDKHooks,
+REST in Pawn includes and install its SMX and
+`translations/gokz-top-web-bridge.phrases.txt` separately. It requires SDKHooks,
 GOKZ, basecomm and a working HTTPS CA bundle.
 
 On first load it creates `cfg/sourcemod/gokz-top-web-bridge.cfg` with
@@ -30,6 +31,12 @@ the CFG to keep it disabled across map changes and restarts. Disabling removes
 the mirror bots and withdraws the browser play link. A lost connection expires
 on the website after five seconds. `sm_webbridge_status` reports the configured
 and active state, server address and latest HTTP status.
+
+Web chat uses GOKZ's normal lime player names and white messages, with a
+`[Web]` prefix. Join and leave notifications use the same name colour; chat
+colour tokens supplied by players are stripped like native GOKZ chat. Browser
+spectators keep their mirror bot on the spectator team and return it to CT
+when they resume playing.
 
 ## Apply For An API Key
 

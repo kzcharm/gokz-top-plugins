@@ -15,7 +15,7 @@ public Plugin myinfo =
 	name = "Web GOKZ bridge",
 	author = "GOKZ.TOP",
 	description = "Opt-in browser players and shared public chat",
-	version = "0.5.1"
+	version = "0.6.0"
 };
 
 char gC_Key[128], gC_Map[PLATFORM_MAX_PATH], gC_Generation[40];
@@ -35,6 +35,17 @@ bool gB_Enabled;
 char gC_URL[512], gC_Server[256];
 
 #include "gokz-top-web-bridge/bots.sp"
+
+// Optional public API from gokz-progress; values are fractions from 0 to 1.
+native float GOKZ_PG_GetProgress(int client);
+native bool GOKZ_PG_IsEnabled(int client);
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
+{
+	MarkNativeAsOptional("GOKZ_PG_GetProgress");
+	MarkNativeAsOptional("GOKZ_PG_IsEnabled");
+	return APLRes_Success;
+}
 
 public void OnClientAuthorized(int client, const char[] auth)
 {
@@ -222,7 +233,7 @@ JSONArray CapturePlayers()
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		char id[32], name[MAX_NAME_LENGTH];
-		if (!IsClientInGame(i) || IsFakeClient(i) || !IsPlayerAlive(i)
+		if (!IsClientInGame(i) || IsFakeClient(i)
 			|| !GetClientAuthId(i, AuthId_SteamID64, id, sizeof(id))) continue;
 		GetClientName(i, name, sizeof(name));
 		JSONObject player = new JSONObject();
@@ -230,6 +241,20 @@ JSONArray CapturePlayers()
 		player.SetString("name", name);
 		int mode = GOKZ_GetCoreOption(i, Option_Mode);
 		player.SetString("mode", (mode >= 0 && mode < MODE_COUNT) ? gC_ModeNamesShort[mode] : "VNL");
+		player.SetBool("timer_running", GOKZ_GetTimerRunning(i));
+		player.SetBool("timer_paused", GOKZ_GetPaused(i));
+		player.SetBool("spectating", !IsPlayerAlive(i));
+		player.SetInt("time_ms", RoundToFloor(GOKZ_GetTime(i) * 1000.0));
+		player.SetInt("teleports", GOKZ_GetTeleportCount(i));
+		player.SetInt("course", GOKZ_GetCourse(i));
+		player.SetNull("progress");
+		if (GetFeatureStatus(FeatureType_Native, "GOKZ_PG_GetProgress") == FeatureStatus_Available
+			&& GetFeatureStatus(FeatureType_Native, "GOKZ_PG_IsEnabled") == FeatureStatus_Available
+			&& GOKZ_PG_IsEnabled(i))
+		{
+			float progress = GOKZ_PG_GetProgress(i);
+			if (progress >= 0.0 && progress <= 1.0) player.SetFloat("progress", progress * 100.0);
+		}
 		float vec[3];
 		GetClientAbsOrigin(i, vec);
 		SetVector(player, "position", vec, 3);

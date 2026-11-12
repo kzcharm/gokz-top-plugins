@@ -43,6 +43,10 @@ Web chat uses GOKZ's normal lime player names and white messages, with a
 colour tokens supplied by players are stripped like native GOKZ chat. Browser
 spectators keep their mirror bot on the spectator team and return it to CT
 when they resume playing.
+Native player snapshots include GOKZ timer time, running/paused state, course,
+teleport count and spectator state. Progress uses the optional gokz-progress API
+and is unavailable when tracking is inactive. Upgrade the website/room service
+before installing bridge 0.6.0 so it accepts the added status fields.
 
 Mirror bots display the Web player's Steam avatar using client-visible identity
 data while remaining bots to SourceMod and server authentication. If that Steam

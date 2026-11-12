@@ -15,7 +15,7 @@ public Plugin myinfo =
 	name = "Web GOKZ bridge",
 	author = "GOKZ.TOP",
 	description = "Opt-in browser players and shared public chat",
-	version = "0.6.1"
+	version = "0.7.0"
 };
 
 char gC_Key[128], gC_Map[PLATFORM_MAX_PATH], gC_Generation[40];
@@ -278,7 +278,7 @@ public void OnGameFrame()
 		JSONObject sample = new JSONObject();
 		sample.SetInt("tick", GetGameTickCount());
 		sample.Set("players", players);
-		if (gH_Samples.Length >= 64) gH_Samples.Remove(0);
+		if (gH_Samples.Length >= 256) gH_Samples.Remove(0);
 		gH_Samples.Push(sample);
 		delete sample;
 		gI_Captured++;

@@ -46,7 +46,9 @@ when they resume playing.
 Native player snapshots include GOKZ timer time, running/paused state, course,
 teleport count and spectator state. Progress uses the optional gokz-progress API
 and is unavailable when tracking is inactive. Upgrade the website/room service
-before installing bridge 0.6.0 so it accepts the added status fields.
+before upgrading the bridge so it accepts the added status fields and larger
+sample batches. Bridge 0.7.0 retains up to 256 native samples while an HTTP
+request is in flight, avoiding early sample loss on higher-latency routes.
 
 Mirror bots display the Web player's Steam avatar using client-visible identity
 data while remaining bots to SourceMod and server authentication. If that Steam

@@ -26,6 +26,12 @@ and server key with the website operator. Save the key in
 `gokz_top_web_bridge_url` to the website's HTTPS bridge endpoint, then set
 `gokz_top_web_bridge_enabled "1"`.
 
+For instances sharing one installation, create
+`cfg/sourcemod/gokz-top-web-bridge-PORT.cfg` before loading the plugin on that
+instance and store its unique key in `configs/web-gokz-bridge-PORT.key`. These
+files take precedence over the shared defaults. Leave the shared CFG disabled
+so other instances do not opt in when they next load plugins.
+
 Set the enabled ConVar to 0 to stop an active bridge immediately. Save 0 in
 the CFG to keep it disabled across map changes and restarts. Disabling removes
 the mirror bots and withdraws the browser play link. A lost connection expires

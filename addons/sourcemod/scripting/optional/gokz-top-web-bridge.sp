@@ -15,7 +15,7 @@ public Plugin myinfo =
 	name = "Web GOKZ bridge",
 	author = "GOKZ.TOP",
 	description = "Opt-in browser players and shared public chat",
-	version = "0.5.0"
+	version = "0.5.1"
 };
 
 char gC_Key[128], gC_Map[PLATFORM_MAX_PATH], gC_Generation[40];
@@ -57,7 +57,10 @@ public void OnPluginStart()
 	gCV_Enabled.AddChangeHook(ConfigChanged);
 	gCV_URL.AddChangeHook(ConfigChanged);
 	gCV_Server.AddChangeHook(ConfigChanged);
-	AutoExecConfig(true, "gokz-top-web-bridge");
+	char config[64], path[PLATFORM_MAX_PATH];
+	FormatEx(config, sizeof(config), "gokz-top-web-bridge-%d", FindConVar("hostport").IntValue);
+	FormatEx(path, sizeof(path), "cfg/sourcemod/%s.cfg", config);
+	AutoExecConfig(true, FileExists(path) ? config : "gokz-top-web-bridge");
 }
 
 public void OnConfigsExecuted()
@@ -77,7 +80,8 @@ void ConfigureBridge()
 	gCV_URL.GetString(gC_URL, sizeof(gC_URL));
 	gCV_Server.GetString(gC_Server, sizeof(gC_Server));
 	char path[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, path, sizeof(path), "configs/web-gokz-bridge.key");
+	BuildPath(Path_SM, path, sizeof(path), "configs/web-gokz-bridge-%d.key", FindConVar("hostport").IntValue);
+	if (!FileExists(path)) BuildPath(Path_SM, path, sizeof(path), "configs/web-gokz-bridge.key");
 	File key = OpenFile(path, "r");
 	bool valid = key != null && key.ReadLine(gC_Key, sizeof(gC_Key)) && TrimString(gC_Key) >= 32;
 	delete key;

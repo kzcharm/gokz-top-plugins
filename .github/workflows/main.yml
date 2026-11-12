@@ -127,7 +127,7 @@ jobs:
           rsync -av \
             --exclude 'gokz-top-web-bridge.smx' \
             --exclude 'gokz-top-web-bridge.phrases.txt' \
-            --exclude 'gokz-top-web-bridge.cfg' \
+            --exclude 'gokz-top-web-bridge*.cfg' \
             --exclude 'web-gokz*.key' \
             --exclude '.git/' \
             --exclude '.github/' \
@@ -142,7 +142,7 @@ jobs:
           rsync -av \
             --exclude 'gokz-top-web-bridge.smx' \
             --exclude 'gokz-top-web-bridge.phrases.txt' \
-            --exclude 'gokz-top-web-bridge.cfg' \
+            --exclude 'gokz-top-web-bridge*.cfg' \
             --exclude 'web-gokz*.key' \
             --exclude '.git/' \
             --exclude '.github/' \
@@ -176,7 +176,7 @@ jobs:
             !*.zip
             !**/gokz-top-web-bridge.smx
             !**/gokz-top-web-bridge.phrases.txt
-            !**/gokz-top-web-bridge.cfg
+            !**/gokz-top-web-bridge*.cfg
             !**/web-gokz*.key
 
       - name: upload-upgrade
@@ -196,7 +196,7 @@ jobs:
             !*.zip
             !**/gokz-top-web-bridge.smx
             !**/gokz-top-web-bridge.phrases.txt
-            !**/gokz-top-web-bridge.cfg
+            !**/gokz-top-web-bridge*.cfg
             !**/web-gokz*.key
 
       - name: publish-release

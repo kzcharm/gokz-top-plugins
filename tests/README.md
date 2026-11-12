@@ -1,5 +1,15 @@
 # SourceMod regression probes
 
+## Web bridge avatar identities
+
+Compile and load `web_bridge_identity.sp` on csgotest. Its production identity
+helpers must pass 353 assertions for Steam account bounds and restoring only
+identity fields. `sm_bridge_identity_test STEAMID64` creates one isolated bot and
+checks its client-visible identity against native account presence, including
+spectators, while asserting server authentication remains `BOT`. Repeat before
+and after the native player disconnects/reconnects to verify the same bot changes
+identity. Unload and remove the probe afterward; unloading removes its bot.
+
 ## Record filter queue gates
 
 Compile `record_filters.sp` with the records plugin's include paths and load it

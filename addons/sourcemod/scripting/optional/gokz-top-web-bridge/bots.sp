@@ -1,4 +1,5 @@
 char gC_Owner[MAXPLAYERS + 1][32];
+#include "identity.sp"
 #define TRAIL_SIZE 96
 enum struct BotPose
 {
@@ -19,6 +20,8 @@ public void OnClientDisconnect(int client)
 {
 	gC_Owner[client][0] = 0;
 	gI_Count[client] = 0;
+	ResetMirrorIdentity(client);
+	RequestFrame(RefreshMirrorIdentities);
 }
 
 public Action GOKZ_OnTimerStart(int client, int course)
@@ -117,6 +120,7 @@ void ApplyMirrors(JSONArray players)
 		if (bot)
 		{
 			seen[bot] = true;
+			UpdateMirrorIdentity(bot);
 			int team = pose.HasKey("spectating") && pose.GetBool("spectating") ? CS_TEAM_SPECTATOR : CS_TEAM_CT;
 			if (GetClientTeam(bot) != team)
 			{

@@ -38,6 +38,13 @@ colour tokens supplied by players are stripped like native GOKZ chat. Browser
 spectators keep their mirror bot on the spectator team and return it to CT
 when they resume playing.
 
+Mirror bots display the Web player's Steam avatar using client-visible identity
+data while remaining bots to SourceMod and server authentication. If that Steam
+account is already connected natively, including as a spectator, the mirror keeps
+its normal bot identity to avoid duplicate scoreboard entries disappearing. The
+identity is refreshed when native players join or leave. The `[Web]` name remains;
+CS:GO's automatic `BOT` label is hidden only while the avatar identity is assigned.
+
 ## Apply For An API Key
 
 API keys are issued per server group on GOKZ.TOP.

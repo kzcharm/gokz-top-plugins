@@ -15,7 +15,7 @@ public Plugin myinfo =
 	name = "Web GOKZ bridge",
 	author = "GOKZ.TOP",
 	description = "Opt-in browser players and shared public chat",
-	version = "0.4.0"
+	version = "0.5.0"
 };
 
 char gC_Key[128], gC_Map[PLATFORM_MAX_PATH], gC_Generation[40];
@@ -35,6 +35,11 @@ bool gB_Enabled;
 char gC_URL[512], gC_Server[256];
 
 #include "gokz-top-web-bridge/bots.sp"
+
+public void OnClientAuthorized(int client, const char[] auth)
+{
+	if (!IsFakeClient(client)) RefreshMirrorIdentities(0);
+}
 
 public void OnPluginStart()
 {

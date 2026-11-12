@@ -125,6 +125,9 @@ jobs:
 
           mkdir -p dist/full dist/upgrade
           rsync -av \
+            --exclude 'gokz-top-web-bridge.smx' \
+            --exclude 'gokz-top-web-bridge.cfg' \
+            --exclude 'web-gokz*.key' \
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude 'sm/' \
@@ -136,6 +139,9 @@ jobs:
             ./ dist/full/"${full_name}"/
 
           rsync -av \
+            --exclude 'gokz-top-web-bridge.smx' \
+            --exclude 'gokz-top-web-bridge.cfg' \
+            --exclude 'web-gokz*.key' \
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude 'sm/' \
@@ -166,6 +172,9 @@ jobs:
             !*.md
             !addons/sourcemod/scripting*
             !*.zip
+            !**/gokz-top-web-bridge.smx
+            !**/gokz-top-web-bridge.cfg
+            !**/web-gokz*.key
 
       - name: upload-upgrade
         uses: actions/upload-artifact@v4
@@ -182,6 +191,9 @@ jobs:
             !addons/sourcemod/scripting*
             !cfg*
             !*.zip
+            !**/gokz-top-web-bridge.smx
+            !**/gokz-top-web-bridge.cfg
+            !**/web-gokz*.key
 
       - name: publish-release
         if: github.event_name != 'pull_request'

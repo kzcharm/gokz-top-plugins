@@ -2,5 +2,7 @@
 sm/
 addons/sourcemod/plugins/*.smx
 addons/sourcemod/scripting/*.smx
+addons/sourcemod/configs/web-gokz*.key
+cfg/sourcemod/gokz-top-web-bridge.cfg
 .sdk/
 addons/sourcemod/extensions/*.so

@@ -11,10 +11,10 @@
 
 public Plugin myinfo =
 {
-	name = "Web GOKZ staging bridge",
+	name = "Web GOKZ bridge",
 	author = "GOKZ.TOP",
-	description = "Mirror browser players and share public chat with Web GOKZ Room 1",
-	version = "0.2.0"
+	description = "Opt-in browser players and shared public chat",
+	version = "0.3.0"
 };
 
 char gC_Key[128], gC_Map[PLATFORM_MAX_PATH], gC_Generation[40];
@@ -29,19 +29,14 @@ JSONArray gH_Samples;
 bool gB_Active;
 int gI_Captured, gI_WebSamples, gI_Moved;
 float gF_WebClock, gF_Started;
+ConVar gCV_Enabled, gCV_URL, gCV_Server;
+bool gB_Enabled;
+char gC_URL[512], gC_Server[256];
 
 #include "gokz-top-web-bridge/bots.sp"
 
 public void OnPluginStart()
 {
-	char path[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, path, sizeof(path), "configs/web-gokz-staging.key");
-	File key = OpenFile(path, "r");
-	if (key == null || !key.ReadLine(gC_Key, sizeof(gC_Key)) || TrimString(gC_Key) < 32)
-	{
-		SetFailState("Set the staging bridge key in configs/web-gokz-staging.key");
-	}
-	delete key;
 	gH_Chat = new JSONArray();
 	gH_Notices = new JSONArray();
 	gH_Samples = new JSONArray();
@@ -49,11 +44,83 @@ public void OnPluginStart()
 	CreateTimer(0.1, Poll, _, TIMER_REPEAT);
 	RegServerCmd("sm_webbridge_status", Status);
 	AddCommandListener(OnServerSay, "say");
+	gCV_Enabled = CreateConVar("gokz_top_web_bridge_enabled", "0", "Allow browser players to join this server.", _, true, 0.0, true, 1.0);
+	gCV_URL = CreateConVar("gokz_top_web_bridge_url", "https://api.gokz.top/v1/web-gokz/native/exchange", "HTTPS Web GOKZ bridge endpoint.");
+	gCV_Server = CreateConVar("gokz_top_web_bridge_server", "", "Public host:port provisioned for this server's bridge key.");
+	gCV_Enabled.AddChangeHook(ConfigChanged);
+	gCV_URL.AddChangeHook(ConfigChanged);
+	gCV_Server.AddChangeHook(ConfigChanged);
+	AutoExecConfig(true, "gokz-top-web-bridge");
 }
+
+public void OnConfigsExecuted()
+{
+	ConfigureBridge();
+}
+
+public void ConfigChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	ConfigureBridge();
+}
+
+void ConfigureBridge()
+{
+	DisableBridge();
+	if (!gCV_Enabled.BoolValue) return;
+	gCV_URL.GetString(gC_URL, sizeof(gC_URL));
+	gCV_Server.GetString(gC_Server, sizeof(gC_Server));
+	char path[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, path, sizeof(path), "configs/web-gokz-bridge.key");
+	File key = OpenFile(path, "r");
+	bool valid = key != null && key.ReadLine(gC_Key, sizeof(gC_Key)) && TrimString(gC_Key) >= 32;
+	delete key;
+	if (!valid || StrContains(gC_URL, "https://") != 0 || !gC_Server[0])
+	{
+		LogError("Bridge remains inactive: configure its HTTPS URL, public server address and configs/web-gokz-bridge.key.");
+		return;
+	}
+	gB_Enabled = true;
+}
+
+void DisableBridge()
+{
+	if (gB_Enabled)
+	{
+		JSONObject body = new JSONObject();
+		JSONArray empty = new JSONArray();
+		body.SetBool("enabled", false);
+		body.SetString("map_name", gC_Map);
+		body.SetString("generation", gC_Generation);
+		body.SetInt("cursor", gI_Cursor);
+		body.Set("players", empty);
+		body.Set("chat", empty);
+		HTTPRequest req = new HTTPRequest(gC_URL);
+		req.SetHeader("X-Bridge-Key", "%s", gC_Key);
+		req.SetHeader("X-Bridge-Server", "%s", gC_Server);
+		req.MaxRedirects = 0;
+		req.Timeout = 3;
+		req.Post(body, OnDisabled);
+		delete body;
+		delete empty;
+	}
+	gB_Enabled = false;
+	gB_Active = false;
+	gB_InFlight = false;
+	gI_Epoch++;
+	gI_Cursor = -1;
+	gC_Generation[0] = 0;
+	gF_NextPoll = 0.0;
+	gH_Chat.Clear();
+	gH_Notices.Clear();
+	gH_Samples.Clear();
+	ClearMirrors();
+}
+
+public void OnDisabled(HTTPResponse response, any value, const char[] error) {}
 
 public Action Status(int args)
 {
-	PrintToServer("[Web GOKZ] map=%s generation=%s cursor=%d http=%d error=%s", gC_Map, gC_Generation, gI_Cursor, gI_LastStatus, gC_LastError);
+	PrintToServer("[Web GOKZ] enabled=%d active=%d server=%s map=%s generation=%s cursor=%d http=%d error=%s", gCV_Enabled.BoolValue, gB_Enabled, gC_Server, gC_Map, gC_Generation, gI_Cursor, gI_LastStatus, gC_LastError);
 	PrintToServer("[Web GOKZ] uptime=%.2f tickrate=%d native_samples=%d web_samples=%d bot_moving_ticks=%d", GetEngineTime() - gF_Started, RoundToNearest(1.0 / GetTickInterval()), gI_Captured, gI_WebSamples, gI_Moved);
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -84,7 +151,12 @@ public void OnMapStart()
 
 public void OnPluginEnd()
 {
-	ClearMirrors();
+	DisableBridge();
+}
+
+public void OnMapEnd()
+{
+	DisableBridge();
 }
 
 public Action OnServerSay(int client, const char[] command, int argc)
@@ -180,7 +252,7 @@ public void OnGameFrame()
 
 public Action Poll(Handle timer)
 {
-	if (gB_InFlight || GetEngineTime() < gF_NextPoll) return Plugin_Continue;
+	if (!gB_Enabled || gB_InFlight || GetEngineTime() < gF_NextPoll) return Plugin_Continue;
 	JSONObject body = new JSONObject();
 	JSONArray players = CapturePlayers();
 	body.SetInt("tickrate", RoundToNearest(1.0 / GetTickInterval()));
@@ -192,8 +264,9 @@ public Action Poll(Handle timer)
 	body.Set("chat", gH_Chat);
 	body.Set("notices", gH_Notices);
 	delete players;
-	HTTPRequest req = new HTTPRequest("https://staging-api.gokz.top/v1/web-gokz/native/exchange");
+	HTTPRequest req = new HTTPRequest(gC_URL);
 	req.SetHeader("X-Bridge-Key", "%s", gC_Key);
+	req.SetHeader("X-Bridge-Server", "%s", gC_Server);
 	req.MaxRedirects = 0;
 	req.Timeout = 3;
 	gB_InFlight = true;
@@ -207,7 +280,7 @@ public Action Poll(Handle timer)
 
 public void OnFrame(HTTPResponse response, int epoch, const char[] error)
 {
-	if (epoch != gI_Epoch) return;
+	if (epoch != gI_Epoch || !gB_Enabled) return;
 	gB_InFlight = false;
 	gI_LastStatus = view_as<int>(response.Status);
 	strcopy(gC_LastError, sizeof(gC_LastError), error);

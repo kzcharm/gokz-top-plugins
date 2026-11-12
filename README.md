@@ -9,6 +9,28 @@ SourceMod plugins for integrating a GOKZ server with [GOKZ.TOP](https://gokz.top
 - Existing GOKZ installation
 - A GOKZ.TOP server group API key
 
+## Optional Web GOKZ bridge
+
+The bridge is installed separately from the normal full and upgrade packages.
+Compile `addons/sourcemod/scripting/optional/gokz-top-web-bridge.sp` with the
+REST in Pawn includes and install its SMX separately. It requires SDKHooks,
+GOKZ, basecomm and a working HTTPS CA bundle.
+
+On first load it creates `cfg/sourcemod/gokz-top-web-bridge.cfg` with
+`gokz_top_web_bridge_enabled "0"`. Disabled installations make no bridge
+requests and create no browser bots. To opt in, provision a dedicated room
+and server key with the website operator. Save the key in
+`addons/sourcemod/configs/web-gokz-bridge.key` with mode 0600. Set
+`gokz_top_web_bridge_server` to the public host and port and
+`gokz_top_web_bridge_url` to the website's HTTPS bridge endpoint, then set
+`gokz_top_web_bridge_enabled "1"`.
+
+Set the enabled ConVar to 0 to stop an active bridge immediately. Save 0 in
+the CFG to keep it disabled across map changes and restarts. Disabling removes
+the mirror bots and withdraws the browser play link. A lost connection expires
+on the website after five seconds. `sm_webbridge_status` reports the configured
+and active state, server address and latest HTTP status.
+
 ## Apply For An API Key
 
 API keys are issued per server group on GOKZ.TOP.

@@ -15,7 +15,7 @@ public Plugin myinfo =
 	name = "Web GOKZ bridge",
 	author = "GOKZ.TOP",
 	description = "Opt-in browser players and shared public chat",
-	version = "0.6.0"
+	version = "0.6.1"
 };
 
 char gC_Key[128], gC_Map[PLATFORM_MAX_PATH], gC_Generation[40];
@@ -332,6 +332,16 @@ public void OnFrame(HTTPResponse response, int epoch, const char[] error)
 		return;
 	}
 	JSONObject frame = view_as<JSONObject>(response.Data);
+	if (!frame.HasKey("clock_ms"))
+	{
+		ClearMirrors();
+		gB_Active = false;
+		gH_Samples.Clear();
+		gC_Generation[0] = 0;
+		gI_Cursor = -1;
+		gF_NextPoll = GetEngineTime() + 0.8;
+		return;
+	}
 	char generation[sizeof(gC_Generation)];
 	frame.GetString("generation", generation, sizeof(generation));
 	if (!StrEqual(generation, gC_Generation))

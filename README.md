@@ -2,85 +2,25 @@
 
 SourceMod plugins for integrating a GOKZ server with [GOKZ.TOP](https://gokz.top).
 
+## Plugins
+
+| Plugin | Purpose |
+| --- | --- |
+| `gokz-top-core` | Provides shared API access, authentication, and HTTP utilities for the other plugins. |
+| `gokz-top-records` | Uploads completed runs and their replays to GOKZ.TOP, with persistent queues and retries. |
+| `gokz-top-replays` | Uploads eligible jumpstat replay files recorded on the server. |
+| `gokz-top-profile` | Displays player profiles, ranks, ratings, tags, and scoreboard levels. |
+| `gokz-top-reviews` | Lets players rate maps and browse map comments in-game. |
+| `gokz-top-servers` | Publishes live server status, including the current map, players, and performance metrics. |
+| `gokz-top-ljroom` | Lets players teleport to detected long-jump blocks on the current map. |
+| `gokz-top-web-bridge` (optional) | Connects browser players to the native server through mirror bots and shared chat. |
+
 ## Requirements
 
 - SourceMod 1.11+
 - SteamWorks extension
 - Existing GOKZ installation
 - A GOKZ.TOP server group API key
-
-## Release packages
-
-Release ZIPs and GitHub Actions artifacts contain the same runtime files:
-`addons/` (including the replay filesystem extension) and `materials/`. Full
-packages also include `cfg/` when provided; upgrade packages omit it to preserve
-server configuration. Source code, tests, build directories, and the optional
-Web GOKZ bridge are excluded.
-
-### Safe upgrades
-
-Extract the release ZIP into a staging directory outside the live game directory,
-then run this repository's upgrade installer on the server:
-
-```bash
-bash scripts/deploy-upgrade.sh /tmp/gokz-top-plugins-VERSION-upgrade /path/to/csgo
-```
-
-The installer copies only `addons/` and `materials/`, preserves existing configuration
-and unrelated files, and replaces changed files by atomic rename. Never copy or
-extract a `.so` directly over a loaded extension with `cp`, `scp`, `unzip`, or
-`rsync --inplace`: truncating its mapped file can crash the server, even when the
-replacement has identical bytes. Upload to staging first. The running process
-keeps the old extension after an atomic replacement; activate the new extension
-and matching plugins with a controlled server restart. Do not hot-reload extensions.
-
-## Optional Web GOKZ bridge
-
-The bridge is installed separately from the normal full and upgrade packages.
-Compile `addons/sourcemod/scripting/optional/gokz-top-web-bridge.sp` with the
-REST in Pawn includes and install its SMX and
-`translations/gokz-top-web-bridge.phrases.txt` separately. It requires SDKHooks,
-GOKZ, basecomm and a working HTTPS CA bundle.
-
-On first load it creates `cfg/sourcemod/gokz-top-web-bridge.cfg` with
-`gokz_top_web_bridge_enabled "0"`. Disabled installations make no bridge
-requests and create no browser bots. To opt in, provision a dedicated room
-and server key with the website operator. Save the key in
-`addons/sourcemod/configs/web-gokz-bridge.key` with mode 0600. Set
-`gokz_top_web_bridge_server` to the public host and port and
-`gokz_top_web_bridge_url` to the website's HTTPS bridge endpoint, then set
-`gokz_top_web_bridge_enabled "1"`.
-
-For instances sharing one installation, create
-`cfg/sourcemod/gokz-top-web-bridge-PORT.cfg` before loading the plugin on that
-instance and store its unique key in `configs/web-gokz-bridge-PORT.key`. These
-files take precedence over the shared defaults. Leave the shared CFG disabled
-so other instances do not opt in when they next load plugins.
-
-Set the enabled ConVar to 0 to stop an active bridge immediately. Save 0 in
-the CFG to keep it disabled across map changes and restarts. Disabling removes
-the mirror bots and withdraws the browser play link. A lost connection expires
-on the website after five seconds. `sm_webbridge_status` reports the configured
-and active state, server address and latest HTTP status.
-
-Web chat uses GOKZ's normal lime player names and white messages, with a
-`[Web]` prefix. Join and leave notifications use the same name colour; chat
-colour tokens supplied by players are stripped like native GOKZ chat. Browser
-spectators keep their mirror bot on the spectator team and return it to CT
-when they resume playing.
-Native player snapshots include GOKZ timer time, running/paused state, course,
-teleport count and spectator state. Progress uses the optional gokz-progress API
-and is unavailable when tracking is inactive. Upgrade the website/room service
-before upgrading the bridge so it accepts the added status fields and larger
-sample batches. Bridge 0.7.0 retains up to 256 native samples while an HTTP
-request is in flight, avoiding early sample loss on higher-latency routes.
-
-Mirror bots display the Web player's Steam avatar using client-visible identity
-data while remaining bots to SourceMod and server authentication. If that Steam
-account is already connected natively, including as a spectator, the mirror keeps
-its normal bot identity to avoid duplicate scoreboard entries disappearing. The
-identity is refreshed when native players join or leave. The `[Web]` name remains;
-CS:GO's automatic `BOT` label is hidden only while the avatar identity is assigned.
 
 ## Apply For An API Key
 
@@ -112,141 +52,3 @@ Reload the API key or restart the server:
 ```cfg
 gokz_top_reload_api_key
 ```
-
-## Live Server Telemetry
-
-`gokz-top-servers` publishes live map and player state to GOKZ.TOP. Version
-0.2.0 adds each player's average round-trip ping and the CS:GO server's
-net-graph-style `SV` and `VAR` frame metrics.
-
-`SV` and `VAR` require the bundled `gokz-top-sv-var.games.txt` gamedata to
-match the server engine. If those addresses are unavailable, the plugin logs
-the problem once and continues publishing all other heartbeat fields,
-including player ping. Older plugin versions remain supported by the website.
-
-## Detected LJ Rooms
-
-`gokz-top-ljroom` downloads the current map's detected long-jump rooms from
-GOKZ.TOP when the map starts. It uses the API base URL configured by
-`gokz-top-core`; the LJ-room read endpoint does not require an API key.
-
-- `!lj [distance]` or `!ljroom [distance]` teleports to the exact or nearest
-  detected block. The default distance is 260.
-- `!ljdefault <distance>` saves a player's preferred distance; omit the value
-  to display the current preference.
-- `sm_ljreload` or `sm_reloadlj` refreshes the current map's data and requires
-  root admin access when run by a player.
-
-Like GOKZ's `!goto`, the command blocks teleporting during a valid run when
-the player's safeguard is enabled. Otherwise it stops a running timer before
-teleporting. Maps without detected rooms return an empty result and remain
-playable normally.
-
-## Jumpstat replay uploads
-
-Install `gokz-top-replays.smx` with the bundled Linux `gokz_top_replay_fs.ext.so`
-in `addons/sourcemod/extensions/`. The helper inspects filesystem entries with
-`lstat` so discovery skips symbolic links. No recorder changes are required.
-
-The uploader discovers both legacy player/type filenames and AXE UUID filenames
-under `data/gokz-replays/_jumps/`. Identity and statistics come from the replay
-header; players can disconnect before upload. Only normal-style supported jumps
-are eligible: each player's best 10 LJs and best jump of each other type per mode.
-The recorder must save a file first; this plugin does not record additional jumps.
-
-Scanning processes at most 128 entries with a 2 ms budget every 100 ms and waits
-60 seconds between complete passes. A private SQLite index avoids resubmitting
-unchanged files. First installation starts at activation time; existing older
-files require manual recovery. Subsequent reloads retain that activation floor
-and discover files saved during downtime. Empty servers must process game ticks
-for background work to progress.
-
-Back up `data/sqlite/gokz-top-replays.sq3` and `data/gokz-top-replays/` together.
-The latter contains immutable upload snapshots. Jobs retain their original API
-URL and never store keys. A process-held filesystem lock elects one uploader
-when multiple game instances share the same SourceMod directory; other instances
-wait and take over automatically when it exits or hibernates. In-flight requests
-are cancelled on hibernation, with a retry delay to let any accepted POST settle. One request runs at a time. Transient failures retry
-with delays of 5, 15, 60, then 300 seconds, up to eight attempts. Authentication
-failures pause; correct the key and run `sm_topreplays_retry`. That command also
-resumes exhausted jobs. `sm_topreplays_status` shows queue counts and scan timing.
-Rejected/ineligible snapshots are deleted; exhausted/authentication jobs remain.
-
-To build the helper on Linux, provide a SourceMod SDK checkout **with its pinned
-SourcePawn and AMTL submodules**, then run:
-
-```bash
-SOURCEMOD_SDK=/path/to/sourcemod \
-SOURCEPAWN_SDK=/path/to/sourcemod/sourcepawn \
-AMTL_SDK=/path/to/sourcemod/public/amtl \
-  bash extensions/replay-filesystem/build.sh /output/gokz_top_replay_fs.ext.so
-```
-
-The build uses a multilib C++ compiler for CS:GO's 32-bit Linux runtime. Do not
-substitute SourcePawn master headers for the SDK's pinned revision: their native
-context ABI can differ. Release archives include the compiled helper.
-
-## Optional relay records
-
-`gokz-top-records` 1.2.0 consumes the optional AXEKZ `gokz/relay.inc` v2 API.
-A compatible relay producer owns safe-position/checkpoint save/resume and replay continuity;
-this package supplies the gokz.top consumer. The producer requires the matching
-GlobalAPI relay-record guard; core and anticheat stay unchanged.
-
-The consumer captures versioned cumulative validation evidence at every save and
-completion. Relay persists that opaque evidence and the stable run UUIDv7 across
-reconnects. Missing evidence and earlier integrity failures cannot qualify for
-rankings. API v2 requires a valid core timer; settings, anticheat, mode/style and
-producer integrity checks remain enforced. API environments must match at resume.
-Version 1.2.2 allows continuation on another server with a valid SteamID. Each
-segment preserves the earlier integrity verdicts and captures its current server
-identity; the finishing server owns the submitted record. The destination must
-be authorized to submit to the same API environment.
-
-Dedicated completion delivery uses immutable metadata and does not require a
-connected client at delivery time. API v2 finishes through real core end events;
-ordinary capture is suppressed for every restoring/resumed session, including
-missing/mismatched evidence, to keep durable relay delivery the sole upload source. Valid finishes use normal NUB/PRO
-ranking/filter/replay policies and the existing durable upload queue. Identical
-redeliveries preserve queue state; conflicting UUID reuse is rejected. Delivery
-is acknowledged after queueing or a durable rejection, independently of HTTP
-acceptance. `relay_receipts` is in the existing records SQLite database and must
-be included in its backup. The relay producer's snapshots/completions use its own
-PostgreSQL storage.
-
-Replay delivery correlates by UUID, with `_runs/<map>/<uuid>.replay` discovery
-recovering missed callbacks. Records plugin 1.2.3 stores the original replay path
-in SQLite and uploads that file directly, without creating private replay copies.
-Completed UUID run replays must remain available and unchanged until upload succeeds;
-external cleanup or archival jobs must preserve files referenced by pending jobs.
-Temporary run callbacks transfer deletion ownership to the records plugin so the
-original remains available for retries. The uploader never deletes original files.
-Previously queued spool paths remain supported, and discovery can recover old
-spool copies when originals are missing. Existing spool files are not automatically
-deleted; `gokz_top_records_spool_gib` remains only as a deprecated compatibility cvar.
-Back up the records SQLite database together with its referenced replay files.
-Relay jobs are excluded from heuristic GlobalAPI
-identity attachment. Ordinary fresh runs and queued jobs continue when relay is
-absent; unloading relay invalidates active consumer sessions. See
-`tests/README.md` for isolated probes and required producer gameplay checks.
-
-Relay checks `GOKZ_Relay_OnResumeCheck` before claiming a save. The consumer waits
-for client-setting queries to finish; pending/failed requests keep readiness
-blocked for the producer's bounded five-second wait. Successfully queried but
-ineligible values allow gameplay and keep ranked submission disabled. Stop saves
-retain final evidence for the matching UUID/client serial during the synchronous
-stop tick, so listener order cannot erase it. New runs and disconnects clear that
-handoff, and later integrity failures cannot restore eligibility.
-
-Validated safe-position resumes can preserve zero teleports and qualify through
-ordinary PRO or NUB filters. Checkpoint fallback adds one teleport. The consumer
-rejects negative counts and never infers integrity from a zero teleport count;
-all cumulative evidence and relay-owned eligibility checks still apply.
-
-Live resume ranking requires `GOKZ_Relay_GetAPIVersion()==2` and core validity.
-Old/missing runtime negotiation cannot qualify new live captures. Existing durable
-v1 completion/evidence pairs still process under legacy rules; v2 pairs require
-v2 evidence. Valid v1 snapshot evidence can migrate through a validated v2 restore.
-The producer captures evidence in pre-end and confirms its outbox only after the
-real post-end event. Internal restoration starts must advertise `IsRestoring`
-before core start, and `IsResumed`/UUID must survive every end callback.

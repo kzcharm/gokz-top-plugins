@@ -1,5 +1,19 @@
 # SourceMod regression probes
 
+## Safe extension deployment
+
+On Linux with Python 3, GCC, and rsync, run:
+
+```bash
+python3 tests/test_deploy_upgrade.py
+```
+
+This loads a disposable shared library in a separate process, installs a changed
+binary using the real upgrade script, and checks that the existing process can
+still call its old library while a fresh process loads the new one. It also checks
+that configuration and unrelated files survive, and that a missing extension
+rejects the package before copying. It never loads a game server or makes HTTP requests.
+
 ## Web bridge avatar identities
 
 Compile and load `web_bridge_identity.sp` on csgotest. Its production identity

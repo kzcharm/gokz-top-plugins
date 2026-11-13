@@ -17,6 +17,23 @@ packages also include `cfg/` when provided; upgrade packages omit it to preserve
 server configuration. Source code, tests, build directories, and the optional
 Web GOKZ bridge are excluded.
 
+### Safe upgrades
+
+Extract the release ZIP into a staging directory outside the live game directory,
+then run this repository's upgrade installer on the server:
+
+```bash
+bash scripts/deploy-upgrade.sh /tmp/gokz-top-plugins-VERSION-upgrade /path/to/csgo
+```
+
+The installer copies only `addons/` and `materials/`, preserves existing configuration
+and unrelated files, and replaces changed files by atomic rename. Never copy or
+extract a `.so` directly over a loaded extension with `cp`, `scp`, `unzip`, or
+`rsync --inplace`: truncating its mapped file can crash the server, even when the
+replacement has identical bytes. Upload to staging first. The running process
+keeps the old extension after an atomic replacement; activate the new extension
+and matching plugins with a controlled server restart. Do not hot-reload extensions.
+
 ## Optional Web GOKZ bridge
 
 The bridge is installed separately from the normal full and upgrade packages.

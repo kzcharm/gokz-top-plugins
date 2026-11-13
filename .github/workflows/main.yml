@@ -154,6 +154,9 @@ jobs:
           cd ../upgrade
           zip -r "../${upgrade_name}.zip" "${upgrade_name}"
 
+      - name: verify safe extension deployment
+        run: python3 tests/test_deploy_upgrade.py
+
       - name: upload-full
         uses: actions/upload-artifact@v4
         with:

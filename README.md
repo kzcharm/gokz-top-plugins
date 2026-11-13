@@ -9,6 +9,14 @@ SourceMod plugins for integrating a GOKZ server with [GOKZ.TOP](https://gokz.top
 - Existing GOKZ installation
 - A GOKZ.TOP server group API key
 
+## Release packages
+
+Release ZIPs and GitHub Actions artifacts contain the same runtime files:
+`addons/` (including the replay filesystem extension) and `materials/`. Full
+packages also include `cfg/` when provided; upgrade packages omit it to preserve
+server configuration. Source code, tests, build directories, and the optional
+Web GOKZ bridge are excluded.
+
 ## Optional Web GOKZ bridge
 
 The bridge is installed separately from the normal full and upgrade packages.

@@ -1,5 +1,22 @@
 # SourceMod regression probes
 
+## Web bridge SteamWorks transport
+
+Compile `web_bridge_http.sp` with the optional bridge's include paths. Run
+`python3 tests/web_bridge_http_fixture.py` on B-csgotest, then load the probe there
+only. The fixture listens on loopback port 18093 and uses dummy credentials.
+Expect `[web-bridge-http-test] PASS assertions=38 callbacks=9`, then unload/remove
+the probe and stop the fixture. It exercises the production HTTP helper against
+success, 503, empty responses, reset connections, timeout, a 150 KiB UTF-8 body,
+stale map/config epochs, disable notifications, recovery, redirects and a waiting
+response beyond the normal three-second active deadline. SteamWorks
+follows redirects with custom headers; configured exchange URLs and their redirect
+destinations must remain trusted. A separate real staging room smoke must check
+bot movement, spectator/CT transitions and shared chat before production rollout.
+Also leave B-csgotest empty for at least 25 seconds: `active=0 waiting=1` must
+remain discoverable and pose counters must stay unchanged. A browser join must
+wake it, and leaving must stop capture and return it to waiting.
+
 ## Ban enforcement and shared JSON strings
 
 Compile `ban_enforcement.sp` with the same include paths as `gokz-top-core.sp`

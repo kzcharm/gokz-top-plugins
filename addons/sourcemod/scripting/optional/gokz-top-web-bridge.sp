@@ -3,19 +3,22 @@
 #include <sdkhooks>
 #include <cstrike>
 #include <ripext>
+#include <SteamWorks>
 #include <basecomm>
 #include <gokz/core>
 #include <sourcemod-colors>
 
 #pragma newdecls required
 #pragma semicolon 1
+// Serialize up to 256 ticks without exhausting SourcePawn's default 16 KiB heap.
+#pragma dynamic 5242880
 
 public Plugin myinfo =
 {
 	name = "Web GOKZ bridge",
 	author = "GOKZ.TOP",
 	description = "Opt-in browser players and shared public chat",
-	version = "0.7.0"
+	version = "0.8.0"
 };
 
 char gC_Key[128], gC_Map[PLATFORM_MAX_PATH], gC_Generation[40];
@@ -35,6 +38,7 @@ bool gB_Enabled;
 char gC_URL[512], gC_Server[256];
 
 #include "gokz-top-web-bridge/bots.sp"
+#include "gokz-top-web-bridge/http.sp"
 
 // Optional public API from gokz-progress; values are fractions from 0 to 1.
 native float GOKZ_PG_GetProgress(int client);
@@ -106,6 +110,8 @@ void ConfigureBridge()
 
 void DisableBridge()
 {
+	delete gH_Request;
+	delete gH_DisableRequest;
 	if (gB_Enabled)
 	{
 		JSONObject body = new JSONObject();
@@ -116,12 +122,7 @@ void DisableBridge()
 		body.SetInt("cursor", gI_Cursor);
 		body.Set("players", empty);
 		body.Set("chat", empty);
-		HTTPRequest req = new HTTPRequest(gC_URL);
-		req.SetHeader("X-Bridge-Key", "%s", gC_Key);
-		req.SetHeader("X-Bridge-Server", "%s", gC_Server);
-		req.MaxRedirects = 0;
-		req.Timeout = 3;
-		req.Post(body, OnDisabled);
+		gH_DisableRequest = SendBridgeRequest(body, true);
 		delete body;
 		delete empty;
 	}
@@ -138,12 +139,10 @@ void DisableBridge()
 	ClearMirrors();
 }
 
-public void OnDisabled(HTTPResponse response, any value, const char[] error) {}
-
 public Action Status(int args)
 {
-	PrintToServer("[Web GOKZ] enabled=%d active=%d server=%s map=%s generation=%s cursor=%d http=%d error=%s", gCV_Enabled.BoolValue, gB_Enabled, gC_Server, gC_Map, gC_Generation, gI_Cursor, gI_LastStatus, gC_LastError);
-	PrintToServer("[Web GOKZ] uptime=%.2f tickrate=%d native_samples=%d web_samples=%d bot_moving_ticks=%d", GetEngineTime() - gF_Started, RoundToNearest(1.0 / GetTickInterval()), gI_Captured, gI_WebSamples, gI_Moved);
+	PrintToServer("[Web GOKZ] transport=SteamWorks enabled=%d active=%d waiting=%d server=%s map=%s generation=%s cursor=%d http=%d error=%s", gCV_Enabled.BoolValue, gB_Active, gB_Enabled && !gB_Active && gB_InFlight, gC_Server, gC_Map, gC_Generation, gI_Cursor, gI_LastStatus, gC_LastError);
+	PrintToServer("[Web GOKZ] uptime=%.2f tickrate=%d native_samples=%d web_samples=%d bot_moving_ticks=%d requests=%d waits=%d", GetEngineTime() - gF_Started, RoundToNearest(1.0 / GetTickInterval()), gI_Captured, gI_WebSamples, gI_Moved, gI_Requests, gI_Waits);
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (!IsMirror(i)) continue;
@@ -156,6 +155,7 @@ public Action Status(int args)
 
 public void OnMapStart()
 {
+	delete gH_Request;
 	GetCurrentMap(gC_Map, sizeof(gC_Map));
 	gI_Epoch++;
 	gI_Cursor = -1;
@@ -183,7 +183,7 @@ public void OnMapEnd()
 
 public Action OnServerSay(int client, const char[] command, int argc)
 {
-	if (client != 0 || argc < 1 || !gC_Generation[0] || gH_Notices.Length >= 32) return Plugin_Continue;
+	if (!gB_Active || client != 0 || argc < 1 || !gC_Generation[0] || gH_Notices.Length >= 32) return Plugin_Continue;
 	char text[256], notice[288];
 	GetCmdArgString(text, sizeof(text));
 	StripQuotes(text);
@@ -194,7 +194,7 @@ public Action OnServerSay(int client, const char[] command, int argc)
 
 public void GOKZ_OnTimerEnd_Post(int client, int course, float runTime, int teleportsUsed)
 {
-	if (!gC_Generation[0] || IsFakeClient(client) || gH_Notices.Length >= 32) return;
+	if (!gB_Active || !gC_Generation[0] || IsFakeClient(client) || gH_Notices.Length >= 32) return;
 	char notice[256];
 	FormatEx(notice, sizeof(notice), "[CS:GO] %N finished %s (course %d) in %.3fs with %d TP.", client, gC_Map, course, runTime, teleportsUsed);
 	gH_Notices.PushString(notice);
@@ -202,7 +202,7 @@ public void GOKZ_OnTimerEnd_Post(int client, int course, float runTime, int tele
 
 public Action GOKZ_CH_OnMessage(int client, const char[] command, const char[] text)
 {
-	if (!StrEqual(command, "say") || IsFakeClient(client) || BaseComm_IsClientGagged(client)
+	if (!gB_Active || !StrEqual(command, "say") || IsFakeClient(client) || BaseComm_IsClientGagged(client)
 		|| gC_Generation[0] == 0 || gH_Chat.Length >= 32) return Plugin_Continue;
 	char message[256], id[32], name[MAX_NAME_LENGTH];
 	strcopy(message, sizeof(message), text);
@@ -290,7 +290,8 @@ public Action Poll(Handle timer)
 {
 	if (!gB_Enabled || gB_InFlight || GetEngineTime() < gF_NextPoll) return Plugin_Continue;
 	JSONObject body = new JSONObject();
-	JSONArray players = CapturePlayers();
+	JSONArray players = gB_Active ? CapturePlayers() : new JSONArray();
+	body.SetBool("wait", !gB_Active);
 	body.SetInt("tickrate", RoundToNearest(1.0 / GetTickInterval()));
 	body.Set("samples", gH_Samples);
 	body.SetString("map_name", gC_Map);
@@ -300,29 +301,30 @@ public Action Poll(Handle timer)
 	body.Set("chat", gH_Chat);
 	body.Set("notices", gH_Notices);
 	delete players;
-	HTTPRequest req = new HTTPRequest(gC_URL);
-	req.SetHeader("X-Bridge-Key", "%s", gC_Key);
-	req.SetHeader("X-Bridge-Server", "%s", gC_Server);
-	req.MaxRedirects = 0;
-	req.Timeout = 3;
-	gB_InFlight = true;
-	req.Post(body, OnFrame, gI_Epoch);
+	gH_Request = SendBridgeRequest(body, false, !gB_Active);
 	delete body;
+	if (gH_Request == null)
+	{
+		gI_LastStatus = 0;
+		strcopy(gC_LastError, sizeof(gC_LastError), "Unable to send SteamWorks request");
+		gF_NextPoll = GetEngineTime() + 2.0;
+		return Plugin_Continue;
+	}
+	gB_InFlight = true;
 	gH_Chat.Clear();
 	gH_Notices.Clear();
 	gH_Samples.Clear();
 	return Plugin_Continue;
 }
 
-public void OnFrame(HTTPResponse response, int epoch, const char[] error)
+void OnFrame(int status, const char[] error, const char[] payload)
 {
-	if (epoch != gI_Epoch || !gB_Enabled) return;
 	gB_InFlight = false;
-	gI_LastStatus = view_as<int>(response.Status);
+	gI_LastStatus = status;
 	strcopy(gC_LastError, sizeof(gC_LastError), error);
-	if (response.Status != HTTPStatus_OK)
+	if (status != 200 || !payload[0])
 	{
-		if (gC_Generation[0]) LogError("Lost staging bridge (HTTP %d)", response.Status);
+		if (gC_Generation[0]) LogError("Lost Web GOKZ bridge (HTTP %d): %s", status, error);
 		ClearMirrors();
 		gB_Active = false;
 		gH_Samples.Clear();
@@ -331,9 +333,13 @@ public void OnFrame(HTTPResponse response, int epoch, const char[] error)
 		gF_NextPoll = GetEngineTime() + 2.0;
 		return;
 	}
-	JSONObject frame = view_as<JSONObject>(response.Data);
+	// Leave a retry deadline in place even if the JSON native rejects a malformed response.
+	gF_NextPoll = GetEngineTime() + 2.0;
+	JSONObject frame = JSONObject.FromString(payload);
+	if (frame == null) return;
 	if (!frame.HasKey("clock_ms"))
 	{
+		delete frame;
 		ClearMirrors();
 		gB_Active = false;
 		gH_Samples.Clear();
@@ -355,11 +361,12 @@ public void OnFrame(HTTPResponse response, int epoch, const char[] error)
 	gB_Active = frame.GetBool("active");
 	strcopy(gC_Generation, sizeof(gC_Generation), generation);
 	gI_Cursor = frame.GetInt("cursor");
-	if (!frame.GetBool("active")) gF_NextPoll = GetEngineTime() + 0.8;
+	gF_NextPoll = GetEngineTime() + (gB_Active ? 0.0 : (gC_Generation[0] ? 0.1 : 20.0));
 	JSONArray players = view_as<JSONArray>(frame.Get("players"));
 	ApplyMirrors(players);
 	delete players;
 	PrintWebMessages(frame);
+	delete frame;
 }
 
 #include "gokz-top-web-bridge/chat.sp"

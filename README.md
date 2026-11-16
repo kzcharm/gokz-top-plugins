@@ -22,6 +22,17 @@ SourceMod plugins for integrating a GOKZ server with [GOKZ.TOP](https://gokz.top
 - Existing GOKZ installation
 - A GOKZ.TOP server group API key
 
+The optional web bridge additionally needs REST in Pawn for JSON, SDKHooks and
+basecomm. Version 0.7.1 uses SteamWorks for HTTP, including disable notifications;
+it does not call REST in Pawn's HTTP client. Install this plugin separately from
+normal release packages and opt in per server. `sm_webbridge_status` reports the
+transport and last HTTP result. SteamWorks follows redirects with custom headers;
+use only trusted canonical HTTPS exchange URLs and trusted redirect destinations.
+Version 0.8.0 waits for an authenticated browser join before capturing native
+players or forwarding chat. Empty rooms keep one lightweight waiting request,
+renewed about every 20 seconds, so discovery stays available. The last browser
+departure stops movement work and returns the plugin to waiting.
+
 ## Apply For An API Key
 
 API keys are issued per server group on GOKZ.TOP.

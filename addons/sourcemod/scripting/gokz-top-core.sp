@@ -10,7 +10,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define GOKZ_TOP_VERSION "1.0.1"
+#define GOKZ_TOP_VERSION "1.0.2"
 #define GOKZ_TOP_DEFAULT_API_BASE_URL "https://api.gokz.top"
 #define GOKZ_TOP_MAX_URL_LENGTH 512
 #define GOKZ_TOP_MAX_BODY_LENGTH 16384
@@ -1171,13 +1171,18 @@ bool ExtractJsonString(const char[] json, const char[] key, char[] out, int maxL
 
 	pos++;
 	int outPos;
-	while (json[pos] != '\0' && outPos < maxLength - 1)
+	while (json[pos] != '\0')
 	{
 		char c = json[pos++];
 		if (c == '"')
 		{
 			out[outPos] = '\0';
 			return true;
+		}
+
+		if (outPos >= maxLength - 1)
+		{
+			break;
 		}
 
 		if (c == '\\' && json[pos] != '\0')

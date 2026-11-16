@@ -1,5 +1,16 @@
 # SourceMod regression probes
 
+## Ban enforcement and shared JSON strings
+
+Compile `ban_enforcement.sp` with the same include paths as `gokz-top-core.sp`
+and load it on csgotest. It includes the production core and captures kicks for
+synthetic clients without creating sessions, HTTP requests, timers, or players.
+Expect `[ban-enforcement-test] PASS assertions=22`, then unload and remove the probe.
+
+Checks cover exact-fit session UUIDs, short/empty/escaped strings, oversized and
+malformed values, active-ban kicks, the API kick message, session cleanup, stale
+responses, unbanned players, explicit no-kick responses, and disconnected clients.
+
 ## Safe extension deployment
 
 On Linux with Python 3, GCC, and rsync, run:

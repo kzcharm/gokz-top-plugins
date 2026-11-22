@@ -18,8 +18,7 @@ public Action Command_LJ(int client, int args)
 		GOKZ_PrintToChat(client, true, "%t", "LJ Room - Must Be Alive");
 		return Plugin_Handled;
 	}
-	if (GOKZ_GetCoreOption(client, Option_Safeguard) > Safeguard_Disabled
-		&& GOKZ_GetTimerRunning(client) && GOKZ_GetValidTimer(client))
+	if (AutoSafe_CheckRun(client))
 	{
 		GOKZ_PrintToChat(client, true, "%t", "LJ Room - Safeguard Blocked");
 		GOKZ_PlayErrorSound(client);

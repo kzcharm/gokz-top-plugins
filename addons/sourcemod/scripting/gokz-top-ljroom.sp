@@ -5,6 +5,7 @@
 #include <json>
 
 #include <gokz/core>
+#include <axekz/autosafe>
 
 #define REQUIRE_PLUGIN
 #include <gokz/top>

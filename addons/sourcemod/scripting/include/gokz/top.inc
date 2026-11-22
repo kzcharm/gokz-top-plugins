@@ -18,6 +18,9 @@ enum GOKZTopLeaderboardDataState
 	GOKZTopLeaderboardData_Error
 };
 
+/** Current map overall tier, or zero while unavailable. */
+native int GOKZTop_GetCurrentMapTier();
+
 /** Shared configuration for durable HTTP clients. Never persist the returned key. */
 native void GOKZTop_GetHTTPConfig(char[] baseURL, int urlLength, char[] apiKey, int keyLength);
 
@@ -132,6 +135,7 @@ public SharedPlugin __pl_gokz_top_core =
 #if !defined REQUIRE_PLUGIN
 public void __pl_gokz_top_core_SetNTVOptional()
 {
+	MarkNativeAsOptional("GOKZTop_GetCurrentMapTier");
 	MarkNativeAsOptional("GOKZTop_PostJSON");
 	MarkNativeAsOptional("GOKZTop_RefreshLeaderboardData");
 	MarkNativeAsOptional("GOKZTop_GetLeaderboardDataState");

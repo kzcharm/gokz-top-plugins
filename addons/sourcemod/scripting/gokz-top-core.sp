@@ -4,6 +4,7 @@
 #include <autoexecconfig>
 
 #include "include/uuid.inc"
+#include <json>
 
 #include <gokz/top>
 
@@ -54,6 +55,7 @@ GlobalForward gH_OnLeaderboardDataFetched;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 {
+	CreateNative("GOKZTop_GetCurrentMapTier", Native_GetCurrentMapTier);
 	CreateNative("GOKZTop_PostJSON", Native_PostJSON);
 	CreateNative("GOKZTop_GetHTTPConfig", Native_GetHTTPConfig);
 	CreateNative("GOKZTop_RefreshLeaderboardData", Native_RefreshLeaderboardData);
@@ -135,7 +137,15 @@ public void OnPluginEnd()
 public void OnMapStart()
 {
 	for (int client = 1; client <= MaxClients; client++) ClearPendingPBFinishes(client);
+	gI_TierMapSerial++;
+	gI_CurrentMapTier = 0;
+	gI_NextTierRequest = 0;
 	GOKZTopPlayers_OnMapStart();
+}
+
+public void OnConfigsExecuted()
+{
+	RefreshCurrentMapTier();
 }
 
 public void OnMapEnd()

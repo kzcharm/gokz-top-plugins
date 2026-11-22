@@ -1,15 +1,79 @@
 // =====[ REQUESTS ]=====
 
+int gI_CurrentMapTier;
+int gI_TierMapSerial;
+int gI_NextTierRequest;
+
+void BuildTierPath(const char[] mapName, char[] path, int size)
+{
+	char encodedMapName[GOKZ_TOP_MAP_NAME_LENGTH * 3];
+	URLEncode(mapName, encodedMapName, sizeof(encodedMapName));
+	Format(path, size, "/v1/maps?name=%s&limit=1", encodedMapName);
+}
+
+public int Native_GetCurrentMapTier(Handle plugin, int numParams)
+{
+	RefreshCurrentMapTier();
+	return gI_CurrentMapTier;
+}
+
+void RefreshCurrentMapTier()
+{
+	if (gI_CurrentMapTier || GetTime() < gI_NextTierRequest)
+	{
+		return;
+	}
+	// The retry interval exceeds the configured HTTP timeout.
+	gI_NextTierRequest = GetTime() + 61;
+	char map[GOKZ_TOP_MAP_NAME_LENGTH], path[GOKZ_TOP_MAX_PATH_LENGTH];
+	GetCurrentDisplayMap(map, sizeof(map));
+	BuildTierPath(map, path, sizeof(path));
+	DataPack pack = new DataPack();
+	pack.WriteCell(gI_TierMapSerial);
+	pack.WriteString(map);
+	SendRecordGETRequest(path, OnCurrentMapTier, pack);
+}
+
+public void OnCurrentMapTier(Handle request, bool failure, bool success, EHTTPStatusCode status, DataPack pack)
+{
+	pack.Reset();
+	int serial = pack.ReadCell();
+	char map[GOKZ_TOP_MAP_NAME_LENGTH];
+	pack.ReadString(map, sizeof(map));
+	delete pack;
+
+	static char body[GOKZ_TOP_MAX_BODY_LENGTH];
+	if (serial == gI_TierMapSerial && IsHTTPResponseOK(failure, success, status)
+		&& ReadHTTPResponseBody(request, body, sizeof(body)))
+	{
+		JSON_Object rows = json_decode(body);
+		if (rows != null && rows.IsArray && rows.Length == 1)
+		{
+			JSON_Object row = rows.GetObjectIndexed(0);
+			char name[GOKZ_TOP_MAP_NAME_LENGTH];
+			if (row != null && row.GetString("name", name, sizeof(name)) && StrEqual(name, map, false))
+			{
+				JSON_Object tiers = row.GetObject("tiers");
+				int tier = tiers == null ? 0 : tiers.GetInt("OVR");
+				if (1 <= tier && tier <= 7)
+				{
+					gI_CurrentMapTier = tier;
+					LogMessage("GOKZ.TOP map tier: %s T%d", map, tier);
+				}
+			}
+		}
+		json_cleanup(rows);
+	}
+	delete request;
+}
+
 void RequestTier(int client)
 {
 	char mapName[GOKZ_TOP_MAP_NAME_LENGTH];
 	GetCurrentDisplayMap(mapName, sizeof(mapName));
 
-	char encodedMapName[GOKZ_TOP_MAP_NAME_LENGTH * 3];
-	URLEncode(mapName, encodedMapName, sizeof(encodedMapName));
-
 	char path[GOKZ_TOP_MAX_PATH_LENGTH];
-	Format(path, sizeof(path), "/v1/maps?name=%s&limit=1", encodedMapName);
+	BuildTierPath(mapName, path, sizeof(path));
 
 	DataPack pack = CreateRecordRequestPack(GOKZTopAPIRequest_Tier, GetClientUserId(client), 0, 0, 0, 0.0, 0.0, 0, false, mapName);
 	if (!SendRecordGETRequest(path, OnRecordHTTPComplete, pack))

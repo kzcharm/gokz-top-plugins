@@ -12,7 +12,8 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define GOKZ_TOP_PROFILE_VERSION "0.1.0"
+#define GOKZ_TOP_PROFILE_VERSION "0.2.1"
+#define CLAN_TAG_BYTES 16
 #define MAX_STEAM_GROUP_TAG_LENGTH 9
 #define GOKZ_TOP_RANK_COUNT 10
 
@@ -160,6 +161,7 @@ public void OnClientConnected(int client)
 	}
 
 	gC_OriginalSteamGroupTag[client][0] = '\0';
+	ResetClanTagState(client);
 	Profile_OnClientConnected(client);
 }
 
@@ -196,7 +198,22 @@ public Action Timer_CaptureSteamGroupTag(Handle timer, int userID)
 
 public void OnClientDisconnect(int client)
 {
+	ResetClanTagState(client);
 	Profile_OnClientDisconnect(client);
+}
+
+public void OnNotifyPluginUnloaded(Handle plugin)
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		for (int layer = 0; layer < 2; layer++)
+		{
+			if (gH_SuffixOwner[client][layer] == plugin)
+			{
+				SetClanTagSuffix(client, plugin, "", layer);
+			}
+		}
+	}
 }
 
 public Action OnClientCommandKeyValues(int client, KeyValues kv)

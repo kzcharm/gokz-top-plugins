@@ -1,3 +1,59 @@
+char gC_ProfileClanTag[MAXPLAYERS + 1][64];
+int gI_ClanTagMode[MAXPLAYERS + 1];
+char gC_ClanTagSuffix[MAXPLAYERS + 1][2][CLAN_TAG_BYTES];
+Handle gH_SuffixOwner[MAXPLAYERS + 1][2];
+
+void ResetClanTagState(int client)
+{
+	gC_ProfileClanTag[client][0] = '\0';
+	gH_SuffixOwner[client][0] = null;
+	gH_SuffixOwner[client][1] = null;
+}
+
+void SetClanTagSuffix(int client, Handle owner, const char[] suffix, int layer)
+{
+	if (!suffix[0] && gH_SuffixOwner[client][layer] != owner)
+	{
+		return;
+	}
+	gH_SuffixOwner[client][layer] = suffix[0] ? owner : null;
+	strcopy(gC_ClanTagSuffix[client][layer], CLAN_TAG_BYTES, suffix);
+	RefreshClanTag(client);
+}
+
+void RefreshClanTag(int client)
+{
+	if (!gC_ProfileClanTag[client][0] || !IsClientInGame(client))
+	{
+		return;
+	}
+
+	int mode = gI_ClanTagMode[client];
+	char tag[CLAN_TAG_BYTES];
+	int layer = gH_SuffixOwner[client][1] != null ? 1 : 0;
+	if (gH_SuffixOwner[client][layer] != null)
+	{
+		char suffix[CLAN_TAG_BYTES];
+		strcopy(suffix, sizeof(suffix), gC_ClanTagSuffix[client][layer]);
+		int limit = sizeof(tag) - 4 - strlen(gC_ModeNamesShort[mode]); // Brackets, space and terminator.
+		if (strlen(suffix) > limit)
+		{
+			while (limit > 0 && (suffix[limit] & 0xC0) == 0x80)
+			{
+				limit--;
+			}
+			suffix[limit] = '\0';
+		}
+		FormatEx(tag, sizeof(tag), "[%s %s]", gC_ModeNamesShort[mode], suffix);
+	}
+	else
+	{
+		CS_SetClientClanTag(client, gC_ProfileClanTag[client]);
+		return;
+	}
+	CS_SetClientClanTag(client, tag);
+}
+
 void UpdateRank(int client, int mode)
 {
 	if (!IsValidClient(client) || IsFakeClient(client))
@@ -142,7 +198,9 @@ void ApplyTags(int client, int mode, char[] clanTag, const char[] chatTag, const
 	{
 		FormatEx(clanTag, 64, "[%s]", gC_ModeNamesShort[mode]);
 	}
-	CS_SetClientClanTag(client, clanTag);
+	gI_ClanTagMode[client] = mode;
+	strcopy(gC_ProfileClanTag[client], sizeof(gC_ProfileClanTag[]), clanTag);
+	RefreshClanTag(client);
 
 	if (!gB_Chat)
 	{

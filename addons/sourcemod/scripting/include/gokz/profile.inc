@@ -308,6 +308,18 @@ forward void GOKZ_PF_OnRankUpdated(int client, int mode, int rank);
  */
 native int GOKZ_PF_GetRank(int client, int mode);
 
+/**
+ * Overrides the scoreboard clan-tag suffix for an in-game human. The mode
+ * prefix is retained and the suffix is clipped to fit at a UTF-8 boundary.
+ * The last setter owns the override. An empty string clears the caller's
+ * override. Disconnecting or unloading the owner also clears it.
+ */
+native void GOKZ_PF_SetClanTagSuffix(int client, const char[] suffix);
+
+/** Sets a higher-priority scoreboard suffix. Clearing it reveals the current
+ * regular suffix. Ownership and cleanup follow GOKZ_PF_SetClanTagSuffix. */
+native void GOKZ_PF_SetClanTagStatus(int client, const char[] suffix);
+
 
 // =====[ DEPENDENCY ]=====
 
@@ -326,5 +338,7 @@ public SharedPlugin __pl_gokz_profile =
 public void __pl_gokz_profile_SetNTVOptional()
 {
 	MarkNativeAsOptional("GOKZ_PF_GetRank");
+	MarkNativeAsOptional("GOKZ_PF_SetClanTagSuffix");
+	MarkNativeAsOptional("GOKZ_PF_SetClanTagStatus");
 }
 #endif

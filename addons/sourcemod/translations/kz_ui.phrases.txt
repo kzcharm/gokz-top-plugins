@@ -1,34 +1,10 @@
 "Phrases"
 {
-    "Tap for board"
-    {
-        "en" "Tap Scoreboard for the player list"
-        "chi" "轻点记分板键打开玩家列表"
-        "ru" "Кратко нажми клавишу счёта для списка игроков"
-    }
     "Settings loading"
     {
         "en" "{yellow}Your settings are still loading"
         "chi" "{yellow}你的设置仍在加载中"
         "ru" "{yellow}Твои настройки ещё загружаются"
-    }
-    "Invalid setting"
-    {
-        "en" "{yellow}Unknown setting or value. Open {default}!kzsettings{yellow} to see your options"
-        "chi" "{yellow}未知的设置或选项值，输入 {default}!kzsettings{yellow} 查看可用选项"
-        "ru" "{yellow}Неизвестная настройка или значение. Открой {default}!kzsettings{yellow}, чтобы посмотреть варианты"
-    }
-    "Panel disabled"
-    {
-        "en" "{yellow}Enable the info panel with {default}!panel{yellow} to show speed there"
-        "chi" "{yellow}先输入 {default}!panel{yellow} 开启信息面板，即可在面板上显示速度"
-        "ru" "{yellow}Включи инфопанель командой {default}!panel{yellow}, чтобы показывать на ней скорость"
-    }
-    "Option unavailable"
-    {
-        "en" "{yellow}This server could not apply that setting"
-        "chi" "{yellow}此服务器无法应用该设置"
-        "ru" "{yellow}Серверу не удалось применить эту настройку"
     }
     "Practice"
     {
@@ -36,161 +12,11 @@
         "chi" "练习"
         "ru" "Тренировка"
     }
-    "Free camera"
-    {
-        "en" "Free camera"
-        "chi" "自由视角"
-        "ru" "Свободная камера"
-    }
-    "Last finish"
-    {
-        "en" "Last finish"
-        "chi" "上次完赛"
-        "ru" "Последний финиш"
-    }
-    "Speed display"
-    {
-        "en" "Speed display"
-        "chi" "速度显示"
-        "ru" "Скорость"
-    }
-    "Spectator list"
-    {
-        "en" "Spectator list"
-        "chi" "旁观者列表"
-        "ru" "Список зрителей"
-    }
-    "Count"
-    {
-        "en" "Count"
-        "chi" "人数"
-        "ru" "Число"
-    }
-    "Count and names"
-    {
-        "en" "Count and names"
-        "chi" "人数和名称"
-        "ru" "Число и имена"
-    }
-    "Info panel"
-    {
-        "en" "Info panel"
-        "chi" "信息面板"
-        "ru" "Инфопанель"
-    }
-    "Bottom"
-    {
-        "en" "Bottom of screen"
-        "chi" "屏幕底部"
-        "ru" "Внизу экрана"
-    }
-    "Playing"
-    {
-        "en" "Playing"
-        "chi" "游玩中"
-        "ru" "Играют"
-    }
-    "Spectating"
-    {
-        "en" "Spectating"
-        "chi" "旁观中"
-        "ru" "Наблюдают"
-    }
-    "Settings"
-    {
-        "en" "GOKZ settings"
-        "chi" "GOKZ 设置"
-        "ru" "Настройки GOKZ"
-    }
     "Paused"
     {
         "en" "Paused"
         "chi" "已暂停"
         "ru" "Пауза"
-    }
-    "Idle"
-    {
-        "en" "Idle"
-        "chi" "未计时"
-        "ru" "Без таймера"
-    }
-    "Refresh"
-    {
-        "en" "Refresh"
-        "chi" "刷新"
-        "ru" "Обновить"
-    }
-    "Choose current player"
-    {
-        "en" "{yellow}Choose a player from the current roster"
-        "chi" "{yellow}请从当前玩家列表中选择一名玩家"
-        "ru" "{yellow}Выбери игрока из текущего списка"
-    }
-    "Player profile"
-    {
-        "en" "Player profile"
-        "chi" "玩家资料"
-        "ru" "Профиль игрока"
-    }
-    "Website link"
-    {
-        "en" "Show profile link"
-        "chi" "显示个人主页链接"
-        "ru" "Показать ссылку на профиль"
-    }
-    "Card link"
-    {
-        "en" "Show player card link"
-        "chi" "显示玩家名片链接"
-        "ru" "Показать ссылку на карточку"
-    }
-    "Rating"
-    {
-        "en" "rating"
-        "chi" "评分"
-        "ru" "рейтинг"
-    }
-    "Timer precision"
-    {
-        "en" "Timer precision"
-        "chi" "计时精度"
-        "ru" "Точность таймера"
-    }
-    "Standard"
-    {
-        "en" "Standard"
-        "chi" "标准"
-        "ru" "Стандартная"
-    }
-    "Precise"
-    {
-        "en" "Precise"
-        "chi" "高精度"
-        "ru" "Высокая"
-    }
-    "PB difference"
-    {
-        "en" "Difference from PB"
-        "chi" "与个人最佳的差值"
-        "ru" "Разница с личным рекордом"
-    }
-    "On"
-    {
-        "en" "On"
-        "chi" "开启"
-        "ru" "Вкл."
-    }
-    "Off"
-    {
-        "en" "Off"
-        "chi" "关闭"
-        "ru" "Выкл."
-    }
-    "All options"
-    {
-        "en" "All GOKZ options"
-        "chi" "全部 GOKZ 选项"
-        "ru" "Все настройки GOKZ"
     }
     "Run"
     {
@@ -228,7 +54,6 @@
         "chi" "分"
         "ru" "очк."
     }
-
     "Tab info enabled"
     {
         "en" "{grey}Tab info {green}enabled"

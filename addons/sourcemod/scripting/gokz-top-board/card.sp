@@ -346,7 +346,7 @@ void PBLine(int viewer, int player, int pro, char[] out, int length)
 
 void ShowScoreCard(int viewer)
 {
-    int player = ObservedRunner(viewer, true);
+    int player = ObservedRunner(viewer);
     if (!player) player = viewer;
     HUDInfo playback;
     bool replay = player > 0 && IsFakeClient(player);

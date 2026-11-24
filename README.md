@@ -22,7 +22,7 @@ Use `!tabinfo` to toggle the overlay. Your preference is saved across reconnects
 
 Install `gokz-top-board.smx` and `translations/kz_ui.phrases.txt` alongside `gokz-top-core`. The board works with the stock client. The progress plugin and local jump database are optional. The AXE PostgreSQL backend supplies saved local jump distances. The board also listens for new local jump PBs. Updating `gokz-top-records` enables immediate PB refresh after an accepted submission.
 
-When upgrading the development example, unload `kz_ui` and move `plugins/kz_ui.smx` into `plugins/disabled/` before loading `gokz-top-board`. Tap Tab or use `!kzboard` for the roster, `!kzplayer` for player details and `!kzsettings` for HUD preferences.
+When upgrading the development example, unload `kz_ui` and move `plugins/kz_ui.smx` into `plugins/disabled/` before loading `gokz-top-board`.
 
 ## Requirements
 
